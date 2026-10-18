@@ -1,0 +1,10 @@
+- [x] Update `_swipeActionButtons` in `chat_home_page.dart` to match web items.
+- [x] Refactor `_circleAction` to support gradients and custom styles.
+- [x] Implement new button styling in `_swipeActionButtons`.
+- [x] Update `_handleActionButton` to correctly route actions for new labels.
+- [x] Verify functionality of each button.
+- [x] Refine `_circleAction` with `size`, `glowColor`, and improved shadows.
+- [x] Match exact colors for all 6 buttons based on web reference.
+- [x] Increase "Yes Sir!" button size to 72.
+- [x] Refine "üi" logo and labels.
+- [x] Verify final UI against reference image.

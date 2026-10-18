@@ -1,0 +1,10 @@
+- `[x]` Fix Dart compilation errors in `lib/ui/chat_home_page.dart`
+- `[x]` Upgrade Gradle version and migrate to Built-in Kotlin
+- `[x]` Fix Filtering and Loading Bugs in `Find Matches` and `Swipe`
+- `[x]` Refine Chat Home Page and Fix UI/UX Bugs
+- `[x]` Fix Swipe Stack Card Order and Filter Logic
+- `[x]` Refine Individual Chat API and User Data Integration
+    - `[x]` Create `ChatDetailResult` model
+    - `[x]` Update `LinkupApiService.fetchChatDetail` parsing
+    - `[x]` Update `ChatController.getChatHistory` logic
+    - `[x]` Verify UI updates with fresh user data

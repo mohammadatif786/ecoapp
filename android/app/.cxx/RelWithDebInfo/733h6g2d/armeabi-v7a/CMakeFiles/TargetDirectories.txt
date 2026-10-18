@@ -1,0 +1,2 @@
+D:/link_ups-master-master/android/app/.cxx/RelWithDebInfo/733h6g2d/armeabi-v7a/CMakeFiles/edit_cache.dir
+D:/link_ups-master-master/android/app/.cxx/RelWithDebInfo/733h6g2d/armeabi-v7a/CMakeFiles/rebuild_cache.dir

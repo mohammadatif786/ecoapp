@@ -1,0 +1,5 @@
+- `[x]` Update `_visaCard` and `_largeCardPreview` to Mastercard + New Number
+- `[x]` Update `_showCardDetails` to match Screenshot 1 (Warning banner + Network/Bank)
+- `[x]` Implement `_showMobileWallet` dialog (Screenshot 2 & 3)
+- `[x]` Wire "Add to Wallet" button in `_showMyCard`
+- `[x]` Final UI polish and verification

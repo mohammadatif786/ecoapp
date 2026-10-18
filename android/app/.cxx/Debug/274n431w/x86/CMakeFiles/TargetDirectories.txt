@@ -1,0 +1,2 @@
+C:/Users/ADMK-Solutions/Documents/link_ups-master-master/android/app/.cxx/Debug/274n431w/x86/CMakeFiles/edit_cache.dir
+C:/Users/ADMK-Solutions/Documents/link_ups-master-master/android/app/.cxx/Debug/274n431w/x86/CMakeFiles/rebuild_cache.dir

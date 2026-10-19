@@ -17,6 +17,11 @@ class ApiEndpoints {
   static const String regularUserWalletSendMoney = '/api/regular-user/wallet/send-money';
   static const String regularUserWalletRequestMoney = '/api/regular-user/wallet/request-money';
   static const String regularUserWalletActivity = '/api/regular-user/wallet/activity';
+  static const String regularUserWalletStripeIntent = '/api/regular-user/wallet/add-amount';
+  static const String regularUserWalletSaveData = '/api/regular-user/wallet/save-data';
+  static const String regularUserWalletCoinCheckout = '/api/regular-user/wallet/coin/checkout';
+  static const String regularUserWalletCoinSaveData = '/api/regular-user/wallet/coin/save-data';
+  static const String regularUserWalletTransactionPin = '/api/regular-user/wallet/transaction-pin';
   static const String regularUserWalletAsueStore = '/api/regular-user/wallet/asues/store';
   static String regularUserWalletAsueAcceptParticipation(int asueId) =>
       '/api/regular-user/wallet/asues/$asueId/accept-participation';

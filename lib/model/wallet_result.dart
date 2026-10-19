@@ -145,13 +145,35 @@ class WalletTransaction {
         ? Map<String, dynamic>.from(json['recipient'] as Map)
         : <String, dynamic>{};
 
+    if (json['type'] != null && meta['type'] == null) {
+      meta['type'] = json['type'];
+    }
+    if (json['title'] != null && meta['title'] == null) {
+      meta['title'] = json['title'];
+    }
+    if (json['description'] != null && meta['description'] == null) {
+      meta['description'] = json['description'];
+    }
+    if (json['purpose'] != null && meta['purpose'] == null) {
+      meta['purpose'] = json['purpose'];
+    }
+
+    final String rawType = (meta['type'] ?? json['type'] ?? json['purpose'] ?? meta['purpose'] ?? '').toString().toLowerCase();
+    final bool isDepositType = rawType == 'cash_deposit' ||
+        rawType == 'coin_deposit' ||
+        rawType == 'cash_topup' ||
+        rawType == 'wallet_topup' ||
+        rawType == 'recharge' ||
+        rawType == 'buy_coins' ||
+        rawType == 'coin_purchase';
+
     return WalletTransaction(
       id: WalletResult._asInt(json['id']),
       amount: WalletResult._asDouble(json['amount'] ?? json['received']),
       currency: (json['currency'] ?? 'USD').toString().toUpperCase(),
       status: (json['status'] ?? '').toString(),
       processorId: (json['processor_id'] ?? '').toString(),
-      isPositive: json['is_positive'] == true,
+      isPositive: json['is_positive'] == true || isDepositType,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
       meta: meta,
       recipientName: (recipient['name'] ?? meta['recipient_name'] ?? '').toString(),
@@ -168,7 +190,37 @@ class WalletTransaction {
   String get senderName => (meta['sender_name'] ?? '').toString();
 
   String get title {
-    switch (type) {
+    final explicitTitle = (meta['title'] ?? meta['description'] ?? '').toString().trim();
+    if (explicitTitle.isNotEmpty &&
+        explicitTitle != 'Top Up - Card' &&
+        explicitTitle != 'wallet_topup' &&
+        explicitTitle != 'buy_coins') {
+      return explicitTitle;
+    }
+
+    final String t = type.toLowerCase();
+    final String p = processorId.toLowerCase();
+    final String purp = (meta['purpose'] ?? '').toString().toLowerCase();
+
+    if (t == 'coin_deposit' ||
+        t == 'coin_purchase' ||
+        t == 'buy_coins' ||
+        purp == 'buy_coins' ||
+        purp == 'coin_deposit') {
+      return 'Coin Deposit';
+    }
+
+    if (t == 'cash_deposit' ||
+        t == 'cash_topup' ||
+        t == 'wallet_topup' ||
+        t == 'recharge' ||
+        purp == 'cash_deposit' ||
+        purp == 'wallet_topup' ||
+        p == 'deposit') {
+      return 'Cash Deposit';
+    }
+
+    switch (t) {
       case 'p2p_transfer':
         if (isPositive) {
           return senderName.isNotEmpty ? 'Received from $senderName' : 'Received money';
@@ -176,8 +228,6 @@ class WalletTransaction {
         return recipientName.isNotEmpty ? 'Sent to $recipientName' : 'Sent money';
       case 'money_request_payment':
         return isPositive ? 'Request paid to you' : 'Paid a request';
-      case 'recharge':
-        return 'Wallet top-up';
       case 'asue_contribution':
         return 'Asue contribution';
       case 'asue_payout':
@@ -189,8 +239,15 @@ class WalletTransaction {
       case 'seller_cash_out_payout':
         return 'Seller payout';
     }
-    if (processorId == 'deposit') return 'Wallet top-up';
-    return isPositive ? 'Received money' : 'Sent money';
+
+    if (p.contains('card') || p.contains('stripe')) {
+      if (t.contains('coin') || purp.contains('coin')) {
+        return 'Coin Deposit';
+      }
+      return 'Cash Deposit';
+    }
+
+    return isPositive ? 'Cash Deposit' : 'Sent money';
   }
 
   String get counterparty {

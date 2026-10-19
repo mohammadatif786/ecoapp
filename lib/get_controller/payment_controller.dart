@@ -13,101 +13,103 @@ class PaymentController extends GetxController {
   RxBool isLoading = false.obs;
 
   void changeLoadingStatus(bool value) {
-    isLoading = RxBool(value);
+    isLoading.value = value;
     update();
   }
 
-  purchaseAndPay(
-      {required String packageID,
-      required String price,
-      required BuildContext context,
-      required String userID,
-      required String duration,
-      required String customerId}) async {
+  purchaseAndPay({
+    required String packageID,
+    required String price,
+    required BuildContext context,
+    required String userID,
+    required String duration,
+    required String customerId, // signature same rakha taake callers na toote
+  }) async {
     changeLoadingStatus(true);
-    var transaction = await FirebaseFirestore.instance
+    final transaction = FirebaseFirestore.instance
         .collection('users')
         .doc(userID)
         .collection('transaction')
         .doc();
+
     try {
-      final url = Uri.parse(
-          "https://us-central1-linkup-cfa21.cloudfunctions.net/stripePaymentTest");
-      Map<String, dynamic> _d = customerId != ''
-          ? {
-              "amount": (double.parse(price) * 100).toString(),
-              "currency": App.currency,
-              "customer_id": customerId
-            }
-          : {
-              "amount": (double.parse(price) * 100).toString(),
-              "currency": App.currency
-            };
-      print('-----------------url');
-      print(url);
-      print(_d);
-      final response = await http.post(url, body: _d);
-      print('----------------------- response');
-      print(response.body);
-      print(transaction.id);
-      var jsonBody = jsonDecode(response.body);
-      Map<String, dynamic>? paymentIntentData;
-      paymentIntentData = jsonBody;
-      if (paymentIntentData!["paymentIntent"] != "" &&
-          paymentIntentData["paymentIntent"] != null) {
-        String _intent = paymentIntentData["paymentIntent"];
+      final url = Uri.parse('https://your-api.com/api/YOUR_ENDPOINT');
+      final amountInCents = (double.parse(price) * 100).round();
 
-        transaction.set({"intent": paymentIntentData, "status": "pending"});
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer YOUR_TOKEN',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'amount': amountInCents,
+          'currency': App.currency,
+        }),
+      );
 
-        await Stripe.instance.initPaymentSheet(
-          paymentSheetParameters: SetupPaymentSheetParameters(
-            paymentIntentClientSecret: _intent,
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
 
-            merchantDisplayName: "LinkUp",
-
-            customerId: customerId, // paymentIntentData['customer'],
-            customerEphemeralKeySecret: paymentIntentData['ephemeralKey'],
-          ),
-        );
-
-        await Stripe.instance.presentPaymentSheet();
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userID)
-            .collection('transaction')
-            .doc(transaction.id)
-            .update({"status": "success"});
-        Subscription _subscription = Subscription(
-            packageId: packageID,
-            transactionId: transaction.id,
-            userId: userID,
-            timeStamp: DateTime.now().millisecondsSinceEpoch,
-            expiry: DateTime.now()
-                .add(Duration(days: (int.parse(duration) * 30)))
-                .millisecondsSinceEpoch);
-        await addSubscription(userID, _subscription);
-        AuthController authController =
-            Get.find(tag: AuthController().toString());
-
-        authController.getUser(userID, context);
-        changeLoadingStatus(false);
-
-        Get.offAll(HomePage());
+      if (data['status'] != true || data['client_secret'] == null) {
+        throw Exception(data['message'] ?? 'Payment intent failed');
       }
+
+      await transaction.set({
+        "intent": {
+          "payment_intent_id": data['payment_intent_id'],
+          "customer_id": data['customer_id'],
+          "amount": data['amount'],
+          "currency": data['currency'],
+        },
+        "status": "pending",
+      });
+
+      Stripe.publishableKey = data['publishableKey'];
+      await Stripe.instance.applySettings();
+
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: data['client_secret'],
+          merchantDisplayName: "LinkUp",
+          customerId: data['customer_id'],
+          customerEphemeralKeySecret: data['ephemeralKey'],
+        ),
+      );
+
+      await Stripe.instance.presentPaymentSheet();
+
+      await transaction.update({"status": "success"});
+
+      final subscription = Subscription(
+        packageId: packageID,
+        transactionId: transaction.id,
+        userId: userID,
+        timeStamp: DateTime.now().millisecondsSinceEpoch,
+        expiry: DateTime.now()
+            .add(Duration(days: int.parse(duration) * 30))
+            .millisecondsSinceEpoch,
+      );
+      await addSubscription(userID, subscription);
+
+      final authController =
+          Get.find<AuthController>(tag: AuthController().toString());
+      authController.getUser(userID, context);
+
+      changeLoadingStatus(false);
+      Get.offAll(HomePage());
     } catch (e) {
       changeLoadingStatus(false);
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userID)
-          .collection('transaction')
-          .doc(transaction.id)
-          .update({"status": "failed"});
-      if (e is StripeException) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(e.error.localizedMessage ?? 'Something went wrong!'),
-        ));
-      }
+      final cancelled =
+          e is StripeException && e.error.code == FailureCode.Canceled;
+      await transaction.set({"status": cancelled ? "cancelled" : "failed"},
+          SetOptions(merge: true));
+
+      final msg = e is StripeException
+          ? (e.error.localizedMessage ?? 'Something went wrong!')
+          : 'Payment failed: $e';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 

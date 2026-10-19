@@ -217,12 +217,20 @@ class LinkupApiService {
         debugPrint('[Dating] $path data[0] keys=${data.first.keys.toList()}');
       }
     }
-    for (final key in const ['users', 'matches', 'friends', 'likes', 'chats', 'profiles']) {
+    for (final key in const [
+      'users',
+      'matches',
+      'friends',
+      'likes',
+      'chats',
+      'profiles'
+    ]) {
       final value = map[key];
       if (value is List) {
         debugPrint('[Dating] $path $key=List(${value.length})');
         if (value.isNotEmpty && value.first is Map) {
-          debugPrint('[Dating] $path $key[0] keys=${value.first.keys.toList()}');
+          debugPrint(
+              '[Dating] $path $key[0] keys=${value.first.keys.toList()}');
         }
       }
     }
@@ -282,9 +290,8 @@ class LinkupApiService {
       if (data is Map) data['cards'],
       if (data is Map) data['suggested'],
       if (data is Map) data['suggested_users'],
-      if (data is Map) data['responseUsers'] is Map
-          ? data['responseUsers']['data']
-          : null,
+      if (data is Map)
+        data['responseUsers'] is Map ? data['responseUsers']['data'] : null,
       map['responseUsers'] is Map ? map['responseUsers']['data'] : null,
       map['matches'],
       map['likes'],
@@ -352,8 +359,8 @@ class LinkupApiService {
     if (body is! Map) return [];
     final map = Map<String, dynamic>.from(body);
     final data = map['data'];
-    final raw = map['discover_users'] ??
-        (data is Map ? data['discover_users'] : null);
+    final raw =
+        map['discover_users'] ?? (data is Map ? data['discover_users'] : null);
     if (raw == null) return [];
     return ApiUserMapper.listFromDatingApi(raw);
   }
@@ -721,7 +728,7 @@ class LinkupApiService {
     );
     final body = _decodeBody(response);
     if (response.statusCode >= 400) _throwFromResponse(response);
-    
+
     if (body is Map) {
       return _usersFromDatingBody(body);
     }
@@ -758,9 +765,8 @@ class LinkupApiService {
             advertisements: dating.advertisements.isNotEmpty
                 ? dating.advertisements
                 : home.advertisements,
-            countries: dating.countries.isNotEmpty
-                ? dating.countries
-                : home.countries,
+            countries:
+                dating.countries.isNotEmpty ? dating.countries : home.countries,
             walletAmount: dating.walletAmount != '0'
                 ? dating.walletAmount
                 : home.walletAmount,
@@ -793,7 +799,8 @@ class LinkupApiService {
     }
 
     final matches = await fetchFindMatches();
-    print('SWIPE_CONSOLE|API|match/find|error-fallback|count=${matches.length}');
+    print(
+        'SWIPE_CONSOLE|API|match/find|error-fallback|count=${matches.length}');
     return HomeFeedResult(
       users: matches,
       advertisements: const [],
@@ -866,9 +873,7 @@ class LinkupApiService {
     if (response.statusCode >= 400) _throwFromResponse(response);
     final events = _parseEventList(body);
     debugPrint('[Events] favorites parsed=${events.length}');
-    return events
-        .map((event) => event.copyWith(isFavourite: true))
-        .toList();
+    return events.map((event) => event.copyWith(isFavourite: true)).toList();
   }
 
   /// `GET /api/regular-user/events/bookings`
@@ -947,7 +952,8 @@ class LinkupApiService {
       if (nested is List) {
         return nested
             .whereType<Map>()
-            .map((item) => LinkupEvent.fromJson(Map<String, dynamic>.from(item)))
+            .map(
+                (item) => LinkupEvent.fromJson(Map<String, dynamic>.from(item)))
             .toList();
       }
       final collected = <LinkupEvent>[];
@@ -978,16 +984,19 @@ class LinkupApiService {
   }
 
   /// `POST /api/regular-user/events/{eventId}/toggle-favorite`
-  static Future<bool> toggleEventFavorite(int eventId, {required bool currentlyFavourite}) async {
+  static Future<bool> toggleEventFavorite(int eventId,
+      {required bool currentlyFavourite}) async {
     final token = await getToken();
-    debugPrint('[Events] toggle-favorite id=$eventId currently=$currentlyFavourite');
+    debugPrint(
+        '[Events] toggle-favorite id=$eventId currently=$currentlyFavourite');
     final response = await http.post(
       _uri(ApiEndpoints.eventToggleFavorite(eventId)),
       headers: _headers(token: token),
       body: jsonEncode({'event_id': eventId}),
     );
     final body = _decodeBody(response);
-    debugPrint('[Events] toggle-favorite status=${response.statusCode} body=$body');
+    debugPrint(
+        '[Events] toggle-favorite status=${response.statusCode} body=$body');
     if (response.statusCode >= 400) _throwFromResponse(response);
     return _parseFavouriteFlag(body, fallback: !currentlyFavourite);
   }
@@ -1112,7 +1121,9 @@ class LinkupApiService {
 
   /// `POST /api/regular-user/events/{id}/reviews`
   static Future<bool> postEventReview(int eventId,
-      {required int rating, required String text, required String reviewerName}) async {
+      {required int rating,
+      required String text,
+      required String reviewerName}) async {
     final token = await getToken();
     final response = await http.post(
       _uri(ApiEndpoints.eventReviews(eventId)),
@@ -1129,7 +1140,9 @@ class LinkupApiService {
 
   /// `PUT /api/regular-user/events/{eventId}/reviews/{reviewId}`
   static Future<bool> updateEventReview(int eventId, int reviewId,
-      {required int rating, required String text, required String reviewerName}) async {
+      {required int rating,
+      required String text,
+      required String reviewerName}) async {
     final token = await getToken();
     final response = await http.put(
       _uri(ApiEndpoints.eventReviewDetail(eventId, reviewId)),
@@ -1258,7 +1271,8 @@ class LinkupApiService {
       if (response.statusCode >= 400) return null;
       final body = _decodeBody(response);
       if (body is! Map) {
-        lastParseError = LinkupApiException('Invalid nightlife detail response');
+        lastParseError =
+            LinkupApiException('Invalid nightlife detail response');
         return null;
       }
       try {
@@ -1271,7 +1285,8 @@ class LinkupApiService {
     }
 
     for (final tryKind in kindsToTry) {
-      final parsed = await tryGet(_uri(ApiEndpoints.nightlifeDetail(tryKind, normalizedId)));
+      final parsed = await tryGet(
+          _uri(ApiEndpoints.nightlifeDetail(tryKind, normalizedId)));
       if (parsed != null) return parsed;
     }
 
@@ -1335,7 +1350,8 @@ class LinkupApiService {
         item = dataMap;
       } else if (dataMap['news'] is Map) {
         item = Map<String, dynamic>.from(dataMap['news'] as Map);
-      } else if (dataMap['news'] is List && (dataMap['news'] as List).isNotEmpty) {
+      } else if (dataMap['news'] is List &&
+          (dataMap['news'] as List).isNotEmpty) {
         final first = (dataMap['news'] as List).first;
         if (first is Map) item = Map<String, dynamic>.from(first);
       }
@@ -1365,14 +1381,16 @@ class LinkupApiService {
     final body = _decodeBody(response);
     if (response.statusCode >= 400) _throwFromResponse(response);
     if (body is! Map) throw LinkupApiException('Invalid likes response');
-    
+
     final map = Map<String, dynamic>.from(body);
     final users = _usersFromDatingBody(map);
-    
+
     return LikesResponse(
       status: map['status'] ?? false,
       users: users,
-      currentUser: map['currentUser'] != null ? ApiUserMapper.fromApi(Map<String, dynamic>.from(map['currentUser'])) : null,
+      currentUser: map['currentUser'] != null
+          ? ApiUserMapper.fromApi(Map<String, dynamic>.from(map['currentUser']))
+          : null,
       balance: int.tryParse(map['balance']?.toString() ?? '0') ?? 0,
     );
   }
@@ -1386,7 +1404,7 @@ class LinkupApiService {
   //   );
   //   final body = _decodeBody(response);
   //   if (response.statusCode >= 400) _throwFromResponse(response);
-    
+
   //   if (body is Map) {
   //     return _usersFromDynamic(body['users']);
   //   }
@@ -1407,7 +1425,7 @@ class LinkupApiService {
     );
     final body = _decodeBody(response);
     if (response.statusCode >= 400) _throwFromResponse(response);
-    
+
     if (body is Map) {
       return FriendListResponse.fromJson(Map<String, dynamic>.from(body));
     }
@@ -1448,10 +1466,10 @@ class LinkupApiService {
     );
     final body = _decodeBody(response);
     if (response.statusCode >= 400) _throwFromResponse(response);
-    
+
     // ignore: avoid_print
     print('DEBUG: fetchEventTickets response body type: ${body.runtimeType}');
-    
+
     if (body is Map) {
       final data = body['data'];
       if (data is Map && data['tickets'] is List) {
@@ -1466,7 +1484,9 @@ class LinkupApiService {
   /// `GET /api/regular-user/live-streams/network`
   static Future<LiveStreamResponse> fetchLiveStreams({String? category}) async {
     final token = await getToken();
-    final query = category != null && category != 'All' ? '?category=${Uri.encodeComponent(category)}' : '';
+    final query = category != null && category != 'All'
+        ? '?category=${Uri.encodeComponent(category)}'
+        : '';
     final response = await http.get(
       _uri('${ApiEndpoints.liveNetwork}$query'),
       headers: _headers(token: token, json: false),
@@ -1487,7 +1507,8 @@ class LinkupApiService {
     final body = _decodeBody(response);
     if (response.statusCode >= 400) _throwFromResponse(response);
     if (body is! Map) throw LinkupApiException('Invalid categories response');
-    return LiveCategoriesResponse.fromJson(Map<String, dynamic>.from(body)).categories;
+    return LiveCategoriesResponse.fromJson(Map<String, dynamic>.from(body))
+        .categories;
   }
 
   /// `POST /api/update-user` (multipart) — sync lat/long for home filters.
@@ -1798,9 +1819,8 @@ class LinkupApiService {
         'reported_user_id': reportedUserId.toString(),
         'message': message,
         'reason': reason,
-        'selected_reason': selectedReason.isEmpty
-            ? '["$reason"]'
-            : selectedReason.toString(),
+        'selected_reason':
+            selectedReason.isEmpty ? '["$reason"]' : selectedReason.toString(),
       },
     );
     if (response.statusCode >= 400) _throwFromResponse(response);
@@ -1834,12 +1854,12 @@ class LinkupApiService {
       'POST',
       ApiEndpoints.register,
       fields: {
-      'first_name': firstName,
-      'last_name': lastName,
-      'email': email,
-      'linkup_id': _formatLinkupId(linkupId),
-      'password': password,
-      'password_confirmation': password,
+        'first_name': firstName,
+        'last_name': lastName,
+        'email': email,
+        'linkup_id': _formatLinkupId(linkupId),
+        'password': password,
+        'password_confirmation': password,
       },
     );
     final body = _decodeBody(response);
@@ -2016,7 +2036,7 @@ class LinkupApiService {
     );
     final body = _decodeBody(response);
     if (response.statusCode >= 400) _throwFromResponse(response);
-    
+
     if (body is Map) {
       return ChatListResponse.fromJson(Map<String, dynamic>.from(body)).users;
     }
@@ -2024,7 +2044,8 @@ class LinkupApiService {
   }
 
   /// `GET /api/regular-user/dating/chats` (fallback: `/user/chat`).
-  static Future<List<RecentChatModel>> fetchChatList({int? currentUserId}) async {
+  static Future<List<RecentChatModel>> fetchChatList(
+      {int? currentUserId}) async {
     try {
       final chats = await fetchDatingChats(currentUserId: currentUserId);
       print('[Chat] dating/chats count=${chats.length}');
@@ -2033,7 +2054,8 @@ class LinkupApiService {
       print('[Chat] dating/chats fallback: $e');
     }
     final token = await getToken();
-    print('[Chat] GET ${ApiEndpoints.chat} token=${token != null && token.isNotEmpty}');
+    print(
+        '[Chat] GET ${ApiEndpoints.chat} token=${token != null && token.isNotEmpty}');
     final response = await http.get(
       _uri(ApiEndpoints.chat),
       headers: _headers(token: token, json: false),
@@ -2059,7 +2081,10 @@ class LinkupApiService {
           map['conversations'] ??
           (data is List ? data : null) ??
           (data is Map
-              ? (data['users'] ?? data['chats'] ?? data['conversations'] ?? data['data'])
+              ? (data['users'] ??
+                  data['chats'] ??
+                  data['conversations'] ??
+                  data['data'])
               : null);
     }
     if (rawUsers is! List) {
@@ -2078,17 +2103,17 @@ class LinkupApiService {
           person['last_message'];
       if (lastRaw is Map) {
         last = Map<String, dynamic>.from(lastRaw);
-      } else if (lastRaw is List && lastRaw.isNotEmpty && lastRaw.first is Map) {
+      } else if (lastRaw is List &&
+          lastRaw.isNotEmpty &&
+          lastRaw.first is Map) {
         last = Map<String, dynamic>.from(lastRaw.first);
       }
 
       final fromId = RecentChatModel.parseInt(last?['from_user_id']);
-      final name = (person['name'] ??
-              person['first_name'] ??
-              person['firstname'] ??
-              '')
-          .toString()
-          .trim();
+      final name =
+          (person['name'] ?? person['first_name'] ?? person['firstname'] ?? '')
+              .toString()
+              .trim();
       chats.add(
         RecentChatModel(
           lastText: RecentChatModel.previewFromContent(
@@ -2101,8 +2126,7 @@ class LinkupApiService {
           withName: name,
           withId: (person['uid'] ?? raw['uid'] ?? '').toString(),
           chatId: (raw['id'] ?? person['id'] ?? '').toString(),
-          timestamp: DateTime.tryParse(
-                      last?['created_at']?.toString() ?? '')
+          timestamp: DateTime.tryParse(last?['created_at']?.toString() ?? '')
                   ?.millisecondsSinceEpoch ??
               0,
           pinned: raw['pinned'] == true ||
@@ -2234,7 +2258,7 @@ class LinkupApiService {
     String? fileName,
   }) async {
     final token = await getToken();
-    
+
     final fields = <String, String>{};
     if (content != null) fields['content'] = content;
     if (fileType != null) fields['attachments[0][type]'] = fileType;
@@ -2272,7 +2296,8 @@ class LinkupApiService {
     if (body is Map) {
       final map = Map<String, dynamic>.from(body);
       if (map['data'] is Map) {
-        return WalletResult.fromJson(Map<String, dynamic>.from(map['data'] as Map));
+        return WalletResult.fromJson(
+            Map<String, dynamic>.from(map['data'] as Map));
       }
       return WalletResult.fromJson(map);
     }
@@ -2338,11 +2363,13 @@ class LinkupApiService {
     if (response.statusCode >= 400) _throwFromResponse(response);
     if (body is! Map) return const [];
     final map = Map<String, dynamic>.from(body);
-    final raw = map['activity'] ?? (map['data'] is Map ? (map['data'] as Map)['activity'] : null);
+    final raw = map['activity'] ??
+        (map['data'] is Map ? (map['data'] as Map)['activity'] : null);
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
-        .map((item) => WalletActivityItem.fromJson(Map<String, dynamic>.from(item)))
+        .map((item) =>
+            WalletActivityItem.fromJson(Map<String, dynamic>.from(item)))
         .toList();
   }
 
@@ -2369,8 +2396,10 @@ class LinkupApiService {
       fields['user_ids[$i]'] = userIds[i].toString();
     }
 
-    debugPrint('[Asue] POST ${ApiConfig.baseUrl}${ApiEndpoints.regularUserWalletAsueStore}');
-    debugPrint('[Asue] fields=$fields token=${token == null || token.isEmpty ? 'missing' : 'present'}');
+    debugPrint(
+        '[Asue] POST ${ApiConfig.baseUrl}${ApiEndpoints.regularUserWalletAsueStore}');
+    debugPrint(
+        '[Asue] fields=$fields token=${token == null || token.isEmpty ? 'missing' : 'present'}');
 
     final response = await _sendMultipart(
       'POST',
@@ -2384,17 +2413,20 @@ class LinkupApiService {
   }
 
   /// `POST /api/regular-user/wallet/asues/:asue/accept-participation`
-  static Future<void> acceptWalletAsueParticipation({required int asueId}) async {
+  static Future<void> acceptWalletAsueParticipation(
+      {required int asueId}) async {
     final token = await getToken();
     final path = ApiEndpoints.regularUserWalletAsueAcceptParticipation(asueId);
     debugPrint('[Asue] POST ${ApiConfig.baseUrl}$path');
-    debugPrint('[Asue] accept-participation asue_id=$asueId token=${token == null || token.isEmpty ? 'missing' : 'present'}');
+    debugPrint(
+        '[Asue] accept-participation asue_id=$asueId token=${token == null || token.isEmpty ? 'missing' : 'present'}');
     final response = await _sendMultipart(
       'POST',
       path,
       token: token,
     );
-    debugPrint('[Asue] accept-participation status=${response.statusCode} body=${response.body}');
+    debugPrint(
+        '[Asue] accept-participation status=${response.statusCode} body=${response.body}');
     if (response.statusCode >= 400) _throwFromResponse(response);
   }
 
@@ -2408,7 +2440,8 @@ class LinkupApiService {
   }
 
   /// `POST /api/regular-user/wallet/asues/:asue/simulate-cycle`
-  static Future<void> simulateWalletAsueWeekPayout({required int asueId}) async {
+  static Future<void> simulateWalletAsueWeekPayout(
+      {required int asueId}) async {
     await _postAsueAction(
       path: ApiEndpoints.regularUserWalletAsueSimulateWeekPayout(asueId),
       asueId: asueId,
@@ -2423,9 +2456,242 @@ class LinkupApiService {
   }) async {
     final token = await getToken();
     debugPrint('[Asue] POST ${ApiConfig.baseUrl}$path');
-    debugPrint('[Asue] $label asue_id=$asueId token=${token == null || token.isEmpty ? 'missing' : 'present'}');
+    debugPrint(
+        '[Asue] $label asue_id=$asueId token=${token == null || token.isEmpty ? 'missing' : 'present'}');
     final response = await _sendMultipart('POST', path, token: token);
-    debugPrint('[Asue] $label status=${response.statusCode} body=${response.body}');
+    debugPrint(
+        '[Asue] $label status=${response.statusCode} body=${response.body}');
     if (response.statusCode >= 400) _throwFromResponse(response);
+  }
+
+  static Future<Map<String, dynamic>> createStripeIntent({
+    required String purpose, // 'cash_deposit', 'wallet_topup' ya 'buy_coins', 'coin_deposit'
+    double? amount, // wallet_topup / cash_deposit ke liye (USD)
+    int? coins, // buy_coins ke liye (pack ke coins)
+    String? title,
+    String? description,
+  }) async {
+    final token = await getToken();
+    final isCoin = purpose == 'buy_coins' || purpose == 'coin_deposit';
+    final resolvedTitle = title ?? (isCoin ? 'Coin Deposit' : 'Cash Deposit');
+    final resolvedDescription = description ?? resolvedTitle;
+    final resolvedType = isCoin ? 'coin_deposit' : 'cash_deposit';
+
+    final bodyMap = <String, dynamic>{
+      'purpose': purpose,
+      'title': resolvedTitle,
+      'description': resolvedDescription,
+      'type': resolvedType,
+      'payment_type': resolvedType,
+      'deposit_type': resolvedType,
+    };
+    final resolvedAmount = amount ?? (coins != null ? coins / 100.0 : 1.0);
+    bodyMap['amount'] = resolvedAmount;
+    bodyMap['selectedAmount'] = resolvedAmount.toString();
+
+    if (coins != null) {
+      bodyMap['coins'] = coins;
+      bodyMap['selectedCoins'] = coins.toString();
+    }
+
+    debugPrint(
+        '[Stripe] POST ${ApiConfig.baseUrl}${ApiEndpoints.regularUserWalletStripeIntent} body=$bodyMap');
+
+    final response = await http.post(
+      _uri(ApiEndpoints.regularUserWalletStripeIntent),
+      headers: _headers(token: token),
+      body: jsonEncode(bodyMap),
+    );
+
+    final body = _decodeBody(response);
+    debugPrint('[Stripe] response status=${response.statusCode} body=$body');
+
+    if (response.statusCode >= 400) _throwFromResponse(response);
+
+    if (body is Map) {
+      return Map<String, dynamic>.from(body);
+    }
+    throw LinkupApiException('Invalid Stripe response format');
+  }
+
+  /// `POST /api/regular-user/wallet/save-data`
+  static Future<bool> saveStripePaymentData({
+    required int userId,
+    required String stripeId,
+    required int stripePrice,
+    required String stripeStatus,
+    String type = 'cash_deposit',
+    String title = 'Cash Deposit',
+    String description = 'Cash Deposit',
+    String purpose = 'cash_deposit',
+  }) async {
+    final token = await getToken();
+    final bodyMap = <String, dynamic>{
+      'user_id': userId,
+      'stripe_id': stripeId,
+      'stripe_price': stripePrice,
+      'stripe_status': stripeStatus,
+      'type': type,
+      'title': title,
+      'description': description,
+      'purpose': purpose,
+      'payment_type': type,
+      'deposit_type': type,
+    };
+
+    debugPrint(
+        '[Stripe] POST ${ApiConfig.baseUrl}${ApiEndpoints.regularUserWalletSaveData} body=$bodyMap');
+
+    final response = await http.post(
+      _uri(ApiEndpoints.regularUserWalletSaveData),
+      headers: _headers(token: token),
+      body: jsonEncode(bodyMap),
+    );
+
+    final body = _decodeBody(response);
+    debugPrint('[Stripe] save-data status=${response.statusCode} body=$body');
+
+    if (response.statusCode >= 400) _throwFromResponse(response);
+
+    if (body is Map && body['status'] == true) {
+      return true;
+    }
+    return false;
+  }
+
+  /// `POST /api/regular-user/wallet/coin/checkout`
+  static Future<Map<String, dynamic>> createCoinCheckoutSession({
+    required double selectedCoin,
+    required int coinCount,
+    String title = 'Coin Deposit',
+    String description = 'Coin Deposit',
+    String type = 'coin_deposit',
+  }) async {
+    final token = await getToken();
+    final bodyMap = <String, dynamic>{
+      'selectedCoin': selectedCoin,
+      'coinCount': coinCount,
+      'title': title,
+      'description': description,
+      'type': type,
+      'purpose': 'coin_deposit',
+      'payment_type': type,
+      'deposit_type': type,
+      'success_url': 'https://linkupvibes.com/payment/success',
+      'cancel_url': 'https://linkupvibes.com/payment/cancel',
+      'successUrl': 'https://linkupvibes.com/payment/success',
+      'cancelUrl': 'https://linkupvibes.com/payment/cancel',
+    };
+
+    debugPrint(
+        '[Stripe] POST ${ApiConfig.baseUrl}${ApiEndpoints.regularUserWalletCoinCheckout} body=$bodyMap');
+
+    final response = await http.post(
+      _uri(ApiEndpoints.regularUserWalletCoinCheckout),
+      headers: _headers(token: token),
+      body: jsonEncode(bodyMap),
+    );
+
+    final body = _decodeBody(response);
+    debugPrint(
+        '[Stripe] coin checkout status=${response.statusCode} body=$body');
+
+    if (response.statusCode >= 400) _throwFromResponse(response);
+
+    if (body is Map) {
+      return Map<String, dynamic>.from(body);
+    }
+    throw LinkupApiException('Invalid coin checkout response format');
+  }
+
+  /// `POST /api/regular-user/wallet/coin/save-data`
+  static Future<bool> saveCoinPurchase({
+    required int userId,
+    required String sessionId,
+    required int coinCount,
+    String type = 'coin_deposit',
+    String title = 'Coin Deposit',
+    String description = 'Coin Deposit',
+    String purpose = 'coin_deposit',
+  }) async {
+    final token = await getToken();
+    final bodyMap = <String, dynamic>{
+      'user_id': userId,
+      'session_id': sessionId,
+      'coinCount': coinCount,
+      'type': type,
+      'title': title,
+      'description': description,
+      'purpose': purpose,
+      'payment_type': type,
+      'deposit_type': type,
+    };
+
+    debugPrint(
+        '[Stripe] POST ${ApiConfig.baseUrl}${ApiEndpoints.regularUserWalletCoinSaveData} body=$bodyMap');
+
+    final response = await http.post(
+      _uri(ApiEndpoints.regularUserWalletCoinSaveData),
+      headers: _headers(token: token),
+      body: jsonEncode(bodyMap),
+    );
+
+    final body = _decodeBody(response);
+    debugPrint('[Stripe] coin save-data status=${response.statusCode} body=$body');
+
+    if (response.statusCode >= 400) _throwFromResponse(response);
+
+    if (body is Map && body['status'] == true) {
+      return true;
+    }
+    return false;
+  }
+
+  /// `POST /api/regular-user/wallet/transaction-pin`
+  static Future<Map<String, dynamic>> updateTransactionPin({
+    required String pin,
+    required String pinConfirmation,
+    String? currentPin,
+  }) async {
+    final token = await getToken();
+    final bodyMap = <String, dynamic>{
+      'pin': pin,
+      'pin_confirmation': pinConfirmation,
+    };
+    if (currentPin != null && currentPin.isNotEmpty) {
+      bodyMap['current_pin'] = currentPin;
+    }
+
+    debugPrint(
+        '[Stripe] POST ${ApiConfig.baseUrl}${ApiEndpoints.regularUserWalletTransactionPin} body=$bodyMap');
+
+    final response = await http.post(
+      _uri(ApiEndpoints.regularUserWalletTransactionPin),
+      headers: _headers(token: token),
+      body: jsonEncode(bodyMap),
+    );
+
+    final body = _decodeBody(response);
+    debugPrint(
+        '[Stripe] transaction pin response status=${response.statusCode} body=$body');
+
+    if (response.statusCode >= 400) {
+      final errorMsg = (body is Map
+              ? (body['message'] ??
+                  body['errors']?['current_pin']?[0] ??
+                  body['errors']?['pin']?[0])
+              : null) ??
+          'Failed to update transaction PIN.';
+      return {'success': false, 'message': errorMsg.toString()};
+    }
+
+    if (body is Map) {
+      return {
+        'success': body['success'] == true || body['status'] == true,
+        'message': body['message']?.toString() ??
+            'Transaction PIN updated successfully.'
+      };
+    }
+    return {'success': false, 'message': 'Invalid response format'};
   }
 }

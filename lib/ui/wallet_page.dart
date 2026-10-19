@@ -2555,7 +2555,7 @@ class _WalletPageState extends State<WalletPage> {
     final contacts = _activeContacts;
     final starting =
         initial ?? (contacts.isNotEmpty ? contacts.first : _fallbackContact);
-    final toController = TextEditingController(text: starting.tag);
+    final toController = TextEditingController(text: starting.name);
     final amountController = TextEditingController();
     WalletContact selectedContact = starting;
     var sheetOpen = true;
@@ -2568,15 +2568,24 @@ class _WalletPageState extends State<WalletPage> {
           }
 
           final amount = _parseAmount(amountController.text);
-          final person = WalletDemoService.resolveContact(toController.text,
-              pool: contacts);
+          WalletContact person = selectedContact;
+          final text = toController.text.trim();
+          if (text.isNotEmpty &&
+              text.toLowerCase() != selectedContact.name.toLowerCase() &&
+              text.toLowerCase() != selectedContact.tag.toLowerCase()) {
+            person = WalletDemoService.resolveContact(text, pool: contacts);
+            selectedContact = person;
+          }
 
           return Container(
-            height: MediaQuery.of(context).size.height * 0.88,
+            constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.88 +
+                    MediaQuery.of(context).viewInsets.bottom),
             decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   padding: const EdgeInsets.fromLTRB(20, 16, 10, 16),
@@ -2648,7 +2657,7 @@ class _WalletPageState extends State<WalletPage> {
                                 contact, selectedContact.tag == contact.tag,
                                 () {
                               selectedContact = contact;
-                              toController.text = contact.tag;
+                              toController.text = contact.name;
                               safeSet(() {});
                             });
                           }).toList(),
@@ -6152,33 +6161,6 @@ class _WalletPageState extends State<WalletPage> {
                                 ),
                               ),
                           ],
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                                color: const Color(0xfff5f8fc),
-                                borderRadius: BorderRadius.circular(16)),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                    radius: 18,
-                                    backgroundImage: _contactAvatar(selected)),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    fromController.text.trim().isEmpty
-                                        ? 'Pick a contact or type a @tag — their photo appears here so you can confirm it’s the right person.'
-                                        : '${selected.name} · ${selected.tag}',
-                                    style: const TextStyle(
-                                        color: Color(0xff8aa0bc),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        height: 1.3),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                           const SizedBox(height: 20),
                           const Text('Amount (USD)',
                               style: TextStyle(

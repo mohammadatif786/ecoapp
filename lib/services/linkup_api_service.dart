@@ -2694,4 +2694,38 @@ class LinkupApiService {
     }
     return {'success': false, 'message': 'Invalid response format'};
   }
+
+  /// `POST /api/regular-user/wallet/verify-transaction-pin`
+  static Future<Map<String, dynamic>> verifyTransactionPin({
+    required String pin,
+  }) async {
+    final token = await getToken();
+    final bodyMap = <String, dynamic>{
+      'pin': pin,
+    };
+
+    debugPrint(
+        '[Stripe] POST ${ApiConfig.baseUrl}${ApiEndpoints.regularUserWalletVerifyTransactionPin} body=$bodyMap');
+
+    final response = await http.post(
+      _uri(ApiEndpoints.regularUserWalletVerifyTransactionPin),
+      headers: _headers(token: token),
+      body: jsonEncode(bodyMap),
+    );
+
+    final body = _decodeBody(response);
+    debugPrint(
+        '[Stripe] verify transaction pin response status=${response.statusCode} body=$body');
+
+    if (body is Map) {
+      final success = body['success'] == true;
+      return {
+        'success': success,
+        'has_pin': body['has_pin'] ?? true,
+        'message': body['message']?.toString() ??
+            (success ? 'Transaction PIN verified successfully.' : 'Incorrect PIN.')
+      };
+    }
+    return {'success': false, 'has_pin': true, 'message': 'Invalid response format'};
+  }
 }

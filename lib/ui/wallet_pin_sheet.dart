@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../services/wallet_demo_service.dart';
+import '../services/linkup_api_service.dart';
 
 Future<bool> openWalletPinSetup(BuildContext context) async {
   if (await WalletDemoService.hasPin()) {
@@ -19,20 +20,77 @@ Future<bool> openWalletPinSetup(BuildContext context) async {
 
 Future<bool> verifyWalletPinForSend(BuildContext context, double amount) async {
   final amountLabel = WalletDemoService.money(amount);
-  if (!await WalletDemoService.hasPin()) {
-    return _createNewPin(
-      context,
-      title: 'Create a 4-digit PIN',
-      subtitle: 'You will use this every time you send money.',
-    );
-  }
+  final controller = TextEditingController();
+  String error = '';
+  var tries = 0;
 
-  return _verifyCurrentPin(
-    context,
-    title: 'Enter your PIN',
-    subtitle: 'Required to send $amountLabel.',
-    cancelMessage: 'Transfer cancelled',
-  );
+  try {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            void submit() async {
+              final pin = controller.text;
+              if (!RegExp(r'^\d{4}$').hasMatch(pin)) {
+                setDialogState(() => error = 'Enter all 4 digits');
+                return;
+              }
+              setDialogState(() => error = 'Verifying...');
+              try {
+                final res = await LinkupApiService.verifyTransactionPin(pin: pin);
+                if (res['success'] == true) {
+                  if (dialogContext.mounted) Navigator.of(dialogContext).pop(true);
+                } else {
+                  tries += 1;
+                  final msg = res['message']?.toString() ?? 'Incorrect PIN.';
+                  if (tries >= 3) {
+                    if (dialogContext.mounted) Navigator.of(dialogContext).pop(false);
+                    Get.snackbar('Transfer cancelled', 'Too many incorrect PIN attempts.', snackPosition: SnackPosition.BOTTOM);
+                  } else {
+                    setDialogState(() {
+                      controller.clear();
+                      error = msg;
+                    });
+                  }
+                }
+              } catch (e) {
+                setDialogState(() => error = 'Verification error: $e');
+              }
+            }
+
+            return _pinDialogShell(
+              dialogContext: dialogContext,
+              icon: Icons.lock_outline_rounded,
+              title: 'Enter your PIN',
+              subtitle: 'Required to send $amountLabel.',
+              child: Column(
+                children: [
+                  _pinField(
+                    controller: controller,
+                    onSubmitted: () => submit(),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 18,
+                    child: Text(error, style: const TextStyle(color: Color(0xffe11d48), fontWeight: FontWeight.w800, fontSize: 12)),
+                  ),
+                  const SizedBox(height: 8),
+                  _pinContinueButton(
+                    onPressed: submit,
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    return result == true;
+  } finally {
+    Future<void>.delayed(const Duration(milliseconds: 400), controller.dispose);
+  }
 }
 
 Future<bool> _verifyCurrentPin(
@@ -220,23 +278,26 @@ Widget _pinDialogShell({
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              children: [
-                Container(
-                  height: 58,
-                  width: 58,
-                  decoration: BoxDecoration(color: const Color(0xff2d98e5), borderRadius: BorderRadius.circular(18)),
-                  child: Icon(icon, color: Colors.white, size: 28),
-                ),
-                const SizedBox(height: 14),
-                Text(title, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xff0f172a), fontWeight: FontWeight.w900, fontSize: 19)),
-                const SizedBox(height: 4),
-                Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xff64748b), fontWeight: FontWeight.w700, fontSize: 12, height: 1.35)),
-                const SizedBox(height: 18),
-                child,
-              ],
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    height: 58,
+                    width: 58,
+                    decoration: BoxDecoration(color: const Color(0xff2d98e5), borderRadius: BorderRadius.circular(18)),
+                    child: Icon(icon, color: Colors.white, size: 28),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(title, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xff0f172a), fontWeight: FontWeight.w900, fontSize: 19)),
+                  const SizedBox(height: 4),
+                  Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xff64748b), fontWeight: FontWeight.w700, fontSize: 12, height: 1.35)),
+                  const SizedBox(height: 18),
+                  child,
+                ],
+              ),
             ),
           ),
         ],

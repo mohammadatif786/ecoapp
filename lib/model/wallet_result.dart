@@ -319,6 +319,81 @@ class WalletTransaction {
   }
 }
 
+class MoneyRequestPerson {
+  final int id;
+  final String name;
+  final String tag;
+  final String img;
+
+  const MoneyRequestPerson({
+    required this.id,
+    required this.name,
+    required this.tag,
+    required this.img,
+  });
+
+  factory MoneyRequestPerson.fromJson(Map<String, dynamic> json) {
+    final idVal = json['id'] ?? 0;
+    final avatar = (json['img'] ?? json['avatar'] ?? json['image'] ?? json['photo'] ?? '').toString().trim();
+    var tagStr = (json['tag'] ?? json['linkup_id'] ?? json['link_up_id'] ?? '').toString().trim();
+    if (tagStr.isNotEmpty && !tagStr.startsWith('@')) tagStr = '@$tagStr';
+    final parsedId = idVal is int ? idVal : int.tryParse(idVal.toString()) ?? 0;
+    return MoneyRequestPerson(
+      id: parsedId,
+      name: (json['name'] ?? 'LinkUp User').toString(),
+      tag: tagStr,
+      img: avatar.isNotEmpty ? avatar : 'https://i.pravatar.cc/150?u=$parsedId',
+    );
+  }
+}
+
+class MoneyRequest {
+  final int id;
+  final double amount;
+  final String? note;
+  final String status; // pending, accepted, rejected, cancelled
+  final String direction; // incoming, outgoing
+  final String dateLabel;
+  final MoneyRequestPerson person;
+
+  const MoneyRequest({
+    required this.id,
+    required this.amount,
+    this.note,
+    required this.status,
+    required this.direction,
+    required this.dateLabel,
+    required this.person,
+  });
+
+  bool get isIncoming => direction.toLowerCase() == 'incoming';
+  bool get isPending => status.toLowerCase() == 'pending';
+
+  factory MoneyRequest.fromJson(Map<String, dynamic> json) {
+    final idVal = json['id'] ?? 0;
+    final amountVal = json['amount'] ?? 0;
+    final directionVal = (json['direction'] ?? (json['is_outgoing'] == true ? 'outgoing' : 'incoming')).toString().toLowerCase();
+
+    final pMap = json['person'] is Map
+        ? Map<String, dynamic>.from(json['person'] as Map)
+        : (json['recipient'] is Map
+            ? Map<String, dynamic>.from(json['recipient'] as Map)
+            : (json['sender'] is Map
+                ? Map<String, dynamic>.from(json['sender'] as Map)
+                : json));
+
+    return MoneyRequest(
+      id: idVal is int ? idVal : int.tryParse(idVal.toString()) ?? 0,
+      amount: amountVal is num ? amountVal.toDouble() : double.tryParse(amountVal.toString()) ?? 0.0,
+      note: json['note']?.toString(),
+      status: (json['status'] ?? 'pending').toString().toLowerCase(),
+      direction: directionVal,
+      dateLabel: (json['dateLabel'] ?? json['created_at'] ?? 'Today').toString(),
+      person: MoneyRequestPerson.fromJson(pMap),
+    );
+  }
+}
+
 class WalletMoneyRequest {
   final int id;
   final double amount;
@@ -328,6 +403,7 @@ class WalletMoneyRequest {
   final String recipientName;
   final String recipientTag;
   final String? recipientAvatar;
+  final bool isOutgoing;
 
   const WalletMoneyRequest({
     required this.id,
@@ -338,6 +414,7 @@ class WalletMoneyRequest {
     required this.recipientName,
     required this.recipientTag,
     this.recipientAvatar,
+    this.isOutgoing = true,
   });
 
   factory WalletMoneyRequest.fromJson(Map<String, dynamic> json) {
@@ -348,6 +425,13 @@ class WalletMoneyRequest {
     var tag = (recipient['linkup_id'] ?? recipient['link_up_id'] ?? '').toString().trim();
     if (tag.isNotEmpty && !tag.startsWith('@')) tag = '@$tag';
 
+    final outgoing = json['is_outgoing'] == true ||
+        json['isOutgoing'] == true ||
+        json['type'] == 'outgoing' ||
+        json['direction'] == 'sent' ||
+        json['is_sent'] == true ||
+        json['sender_id'] != null;
+
     return WalletMoneyRequest(
       id: WalletResult._asInt(json['id']),
       amount: WalletResult._asDouble(json['amount']),
@@ -357,6 +441,7 @@ class WalletMoneyRequest {
       recipientName: (recipient['name'] ?? '').toString().trim(),
       recipientTag: tag,
       recipientAvatar: avatar.startsWith('http') ? avatar : null,
+      isOutgoing: outgoing,
     );
   }
 
@@ -401,6 +486,7 @@ class WalletActivityItem {
   final bool isPositive;
   final String status;
   final String type;
+  final String kind;
   final String counterparty;
   final String note;
   final double runningBalance;
@@ -414,6 +500,7 @@ class WalletActivityItem {
     required this.isPositive,
     required this.status,
     required this.type,
+    this.kind = 'all',
     required this.counterparty,
     required this.note,
     required this.runningBalance,
@@ -429,6 +516,7 @@ class WalletActivityItem {
       isPositive: json['isPositive'] == true || json['is_positive'] == true,
       status: (json['status'] ?? '').toString(),
       type: (json['type'] ?? '').toString(),
+      kind: (json['kind'] ?? '').toString().toLowerCase(),
       counterparty: (json['counterparty'] ?? '').toString(),
       note: (json['note'] ?? '').toString().trim(),
       runningBalance: WalletResult._asDouble(json['runningBalance'] ?? json['running_balance']),
@@ -461,19 +549,22 @@ class WalletActivityItem {
   }
 
   bool get isDeposit =>
-      type == 'recharge' || type == 'asue_payout' || (type == 'wallet' && isPositive);
+      kind == 'deposits' || type == 'recharge' || type == 'asue_payout' || (type == 'wallet' && isPositive);
 
-  bool get isSent => type == 'p2p_transfer' && !isPositive;
+  bool get isSent =>
+      kind == 'sent' || (type == 'p2p_transfer' && !isPositive) || type == 'transfer_out';
 
-  bool get isReceived => type == 'p2p_transfer' && isPositive;
+  bool get isReceived =>
+      kind == 'received' || (type == 'p2p_transfer' && isPositive) || type == 'transfer_in';
 
-  bool get isRequested => type == 'money_request_payment';
+  bool get isRequested =>
+      kind == 'requested' || type == 'money_request_payment' || type.contains('request');
 
   bool get isWithdrawal =>
-      type.contains('withdraw') || type == 'seller_cash_out_payout';
+      kind == 'withdrawals' || type.contains('withdraw') || type == 'seller_cash_out_payout';
 
   bool get isWalletOrCoin =>
-      type == 'wallet' || type.contains('coin') || type == 'asue_contribution';
+      kind == 'wallet-coins' || type == 'wallet' || type.contains('coin') || type == 'asue_contribution';
 }
 
 class WalletActiveAsue {

@@ -16,6 +16,7 @@ import '../services/wallet_demo_service.dart';
 import '../services/linkup_api_service.dart';
 import '../model/wallet_result.dart';
 import 'wallet_pin_sheet.dart';
+import 'requested_money_modal.dart';
 import 'package:link_up/ui/notification_page.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
@@ -306,10 +307,13 @@ class _WalletPageState extends State<WalletPage> {
     }
   }
 
-  Future<void> _loadWalletActivity() async {
+  Future<void> _loadWalletActivity({String? filter, String? search}) async {
     if (mounted) setState(() => _activityLoading = true);
     try {
-      final items = await LinkupApiService.fetchWalletActivity();
+      final items = await LinkupApiService.fetchWalletActivity(
+        filter: filter,
+        search: search,
+      );
       if (!mounted) return;
       setState(() {
         _activityItems = items;
@@ -5729,113 +5733,16 @@ class _WalletPageState extends State<WalletPage> {
   }
 
   Future<void> _showRequestedMoney(BuildContext context) async {
-    if (!_walletApiLoaded)
-      await _loadWalletApi(reason: 'before-requested-money');
-    if (!mounted) return;
-    final requests = _sentRequests;
-
     Get.dialog(
-      Builder(
-        builder: (dialogContext) {
-          return _modalSurface(
-            context,
-            Container(
-              width: _ui(context, 382),
-              constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.78),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
-                      blurRadius: 30,
-                      offset: const Offset(0, 18))
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 12, 18),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                          colors: [Color(0xff102a45), Color(0xff153f67)]),
-                      borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(24)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Requested Money',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 20)),
-                              SizedBox(height: 2),
-                              Text('Requests you sent from your wallet.',
-                                  style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700)),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            if (dialogContext.mounted)
-                              Navigator.of(dialogContext).pop();
-                          },
-                          icon: const Icon(Icons.close,
-                              color: Colors.white, size: 22),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Flexible(
-                    child: requests.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.fromLTRB(16, 28, 16, 32),
-                            child: Text(
-                              'No money requests yet.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  color: Color(0xff8aa0bc),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700),
-                            ),
-                          )
-                        : ListView.separated(
-                            shrinkWrap: true,
-                            padding: const EdgeInsets.all(16),
-                            itemCount: requests.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 10),
-                            itemBuilder: (_, index) {
-                              final request = requests[index];
-                              final name = request.recipientName.isNotEmpty
-                                  ? request.recipientName
-                                  : request.recipientTag;
-                              return _requestedMoneyRow(
-                                name: name.isEmpty ? 'Recipient' : name,
-                                sub: request.subtitle,
-                                amount:
-                                    '\$${request.amount.toStringAsFixed(2)}',
-                                action: request.actionLabel,
-                                isPaid: request.isPaid,
-                                imageUrl: request.recipientAvatar,
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+      _modalSurface(
+        context,
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: _ui(context, 382),
+            maxHeight: MediaQuery.of(context).size.height * 0.78,
+          ),
+          child: const RequestedMoneyModal(),
+        ),
       ),
     );
   }
@@ -6723,9 +6630,44 @@ class _WalletPageState extends State<WalletPage> {
       'All',
     ];
 
+    String tabToFilterParam(String label) {
+      switch (label) {
+        case 'Deposits':
+          return 'deposits';
+        case 'Sent':
+          return 'sent';
+        case 'Received':
+          return 'received';
+        case 'Requested':
+          return 'requested';
+        case 'Withdrawals':
+          return 'withdrawals';
+        case 'Wallet & Coins':
+          return 'wallet-coins';
+        case 'All':
+        default:
+          return 'all';
+      }
+    }
+
     Get.bottomSheet(
       StatefulBuilder(
         builder: (sheetContext, setSheetState) {
+          void onFilterOrSearchChanged(String newTab, String newQuery) {
+            setSheetState(() {
+              tab = newTab;
+              query = newQuery;
+            });
+            _loadWalletActivity(
+              filter: tabToFilterParam(newTab),
+              search: newQuery,
+            ).then((_) {
+              if (sheetContext.mounted) {
+                setSheetState(() {});
+              }
+            });
+          }
+
           bool matchesTab(WalletActivityItem item) {
             switch (tab) {
               case 'Deposits':
@@ -6750,7 +6692,7 @@ class _WalletPageState extends State<WalletPage> {
             if (!matchesTab(item)) return false;
             if (needle.isEmpty) return true;
             final haystack =
-                '${item.title} ${item.counterparty} ${item.note} ${item.type}'
+                '${item.title} ${item.counterparty} ${item.note} ${item.type} ${item.kind}'
                     .toLowerCase();
             return haystack.contains(needle);
           }).toList();
@@ -6826,7 +6768,7 @@ class _WalletPageState extends State<WalletPage> {
                     children: [
                       for (final label in tabs)
                         GestureDetector(
-                          onTap: () => setSheetState(() => tab = label),
+                          onTap: () => onFilterOrSearchChanged(label, query),
                           child: _activityTab(label, tab == label),
                         ),
                     ],
@@ -6837,7 +6779,7 @@ class _WalletPageState extends State<WalletPage> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: TextField(
-                    onChanged: (value) => setSheetState(() => query = value),
+                    onChanged: (value) => onFilterOrSearchChanged(tab, value),
                     decoration: InputDecoration(
                       hintText: 'Search e.g. lunch, @user..',
                       prefixIcon: const Icon(Icons.search, size: 18),

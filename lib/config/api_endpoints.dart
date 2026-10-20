@@ -23,6 +23,10 @@ class ApiEndpoints {
   static const String regularUserWalletCoinSaveData = '/api/regular-user/wallet/coin/save-data';
   static const String regularUserWalletTransactionPin = '/api/regular-user/wallet/transaction-pin';
   static const String regularUserWalletVerifyTransactionPin = '/api/regular-user/wallet/verify-transaction-pin';
+  static String regularUserWalletPayRequest(int id) => '/api/regular-user/wallet/requested-money/$id/pay';
+  static String regularUserWalletRejectRequest(int id) => '/api/regular-user/wallet/requested-money/$id/reject';
+  static String regularUserWalletCancelRequest(int id) => '/api/regular-user/wallet/requested-money/$id/cancel';
+  static const String regularUserWalletRequestedMoneyList = '/api/regular-user/wallet/requested-money';
   static const String regularUserWalletAsueStore = '/api/regular-user/wallet/asues/store';
   static String regularUserWalletAsueAcceptParticipation(int asueId) =>
       '/api/regular-user/wallet/asues/$asueId/accept-participation';

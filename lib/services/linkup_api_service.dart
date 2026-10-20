@@ -57,7 +57,11 @@ class LinkupApiService {
     await prefs.remove(_tokenKey);
   }
 
-  static Uri _uri(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
+  static Uri _uri(String path, [Map<String, String>? queryParameters]) {
+    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    if (queryParameters == null || queryParameters.isEmpty) return uri;
+    return uri.replace(queryParameters: queryParameters);
+  }
 
   static Map<String, String> _headers({String? token, bool json = true}) {
     final headers = <String, String>{
@@ -2338,25 +2342,94 @@ class LinkupApiService {
   static Future<void> requestWalletMoney({
     required double amount,
     required int recipientId,
+    String? note,
   }) async {
     final token = await getToken();
+    final fields = <String, String>{
+      'amount': amount.round().toString(),
+      'recipientId': recipientId.toString(),
+      if (note != null && note.isNotEmpty) 'note': note,
+    };
     final response = await _sendMultipart(
       'POST',
       ApiEndpoints.regularUserWalletRequestMoney,
       token: token,
-      fields: {
-        'amount': amount.round().toString(),
-        'recipientId': recipientId.toString(),
-      },
+      fields: fields,
+    );
+    if (response.statusCode >= 400) _throwFromResponse(response);
+  }
+
+  /// `GET /api/regular-user/wallet/requested-money`
+  static Future<List<MoneyRequest>> fetchMoneyRequests() async {
+    final token = await getToken();
+    final response = await http.get(
+      _uri(ApiEndpoints.regularUserWalletRequestedMoneyList),
+      headers: _headers(token: token, json: false),
+    );
+    final body = _decodeBody(response);
+    if (response.statusCode >= 400) _throwFromResponse(response);
+    if (body is! Map) return const [];
+    final map = Map<String, dynamic>.from(body);
+    final raw = map['moneyRequests'] ?? map['money_requests'] ?? map['data'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) =>
+            MoneyRequest.fromJson(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
+  /// `POST /api/regular-user/wallet/requested-money/{id}/pay`
+  static Future<Map<String, dynamic>> payMoneyRequest(int requestId) async {
+    final token = await getToken();
+    final response = await http.post(
+      _uri(ApiEndpoints.regularUserWalletPayRequest(requestId)),
+      headers: _headers(token: token),
+    );
+    final body = _decodeBody(response);
+    if (response.statusCode >= 400) _throwFromResponse(response);
+    if (body is Map) {
+      return Map<String, dynamic>.from(body);
+    }
+    return {'success': true};
+  }
+
+  /// `POST /api/regular-user/wallet/requested-money/{id}/reject`
+  static Future<void> rejectMoneyRequest(int requestId) async {
+    final token = await getToken();
+    final response = await http.post(
+      _uri(ApiEndpoints.regularUserWalletRejectRequest(requestId)),
+      headers: _headers(token: token),
+    );
+    if (response.statusCode >= 400) _throwFromResponse(response);
+  }
+
+  /// `POST /api/regular-user/wallet/requested-money/{id}/cancel`
+  static Future<void> cancelMoneyRequest(int requestId) async {
+    final token = await getToken();
+    final response = await http.post(
+      _uri(ApiEndpoints.regularUserWalletCancelRequest(requestId)),
+      headers: _headers(token: token),
     );
     if (response.statusCode >= 400) _throwFromResponse(response);
   }
 
   /// `GET /api/regular-user/wallet/activity`
-  static Future<List<WalletActivityItem>> fetchWalletActivity() async {
+  static Future<List<WalletActivityItem>> fetchWalletActivity({
+    String? filter,
+    String? search,
+  }) async {
     final token = await getToken();
+    final query = <String, String>{};
+    if (filter != null && filter.isNotEmpty && filter != 'all') {
+      query['filter'] = filter;
+    }
+    if (search != null && search.trim().isNotEmpty) {
+      query['search'] = search.trim();
+    }
+
     final response = await http.get(
-      _uri(ApiEndpoints.regularUserWalletActivity),
+      _uri(ApiEndpoints.regularUserWalletActivity, query.isNotEmpty ? query : null),
       headers: _headers(token: token, json: false),
     );
     final body = _decodeBody(response);
@@ -2364,7 +2437,9 @@ class LinkupApiService {
     if (body is! Map) return const [];
     final map = Map<String, dynamic>.from(body);
     final raw = map['activity'] ??
-        (map['data'] is Map ? (map['data'] as Map)['activity'] : null);
+        map['activities'] ??
+        (map['data'] is Map ? (map['data'] as Map)['activity'] : null) ??
+        map['data'];
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()

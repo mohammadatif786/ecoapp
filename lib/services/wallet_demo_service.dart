@@ -40,6 +40,7 @@ class WalletSendLimits {
 }
 
 class WalletContact {
+  final int? contactId;
   final String name;
   final String tag;
   final String imageAsset;
@@ -49,6 +50,7 @@ class WalletContact {
   final int? userId;
 
   const WalletContact({
+    this.contactId,
     required this.name,
     required this.tag,
     required this.imageAsset,
@@ -76,20 +78,40 @@ class WalletContact {
         country: '',
       );
     }
+
+    final hasContactUserId = user.containsKey('contact_user_id') || user.containsKey('contactUserId');
+    final rawId = user['id'];
+    final rawContactUserId = user['contact_user_id'] ?? user['contactUserId'];
+    final rawContactId = user['contact_id'] ?? user['contactId'];
+
+    int? parsedContactId;
+    int? parsedUserId;
+
+    if (hasContactUserId) {
+      // Saved contact record: { "id": 3, "contact_user_id": 12, ... }
+      parsedContactId = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+      parsedUserId = rawContactUserId is int ? rawContactUserId : int.tryParse(rawContactUserId?.toString() ?? '');
+    } else {
+      // User profile / search result: { "id": 12, "name": "...", ... }
+      parsedContactId = rawContactId is int ? rawContactId : int.tryParse(rawContactId?.toString() ?? '');
+      parsedUserId = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+    }
+
     final name = (user['name'] ?? fallbackName ?? '').toString().trim();
-    var tag = (user['linkup_id'] ?? user['link_up_id'] ?? user['username'] ?? '').toString().trim();
+    var tag = (user['tag'] ?? user['linkup_id'] ?? user['link_up_id'] ?? user['username'] ?? '').toString().trim();
     if (tag.isNotEmpty && !tag.startsWith('@')) tag = '@$tag';
-    final avatar = (user['avatar'] ?? user['image'] ?? user['photo'] ?? '').toString().trim();
+    final avatar = (user['img'] ?? user['avatar'] ?? user['image'] ?? user['photo'] ?? '').toString().trim();
     final country = (user['country'] ?? user['city'] ?? '').toString();
-    final id = user['id'];
+
     return WalletContact(
-      name: name.isEmpty ? tag.replaceAll('@', '') : name,
+      contactId: parsedContactId,
+      name: name.isEmpty ? (tag.isNotEmpty ? tag.replaceAll('@', '') : 'Recipient') : name,
       tag: tag,
       imageAsset: 'assets/profile2.jpg',
       imageUrl: avatar.startsWith('http') ? avatar : null,
       currency: 'USD',
       country: country,
-      userId: id is int ? id : int.tryParse(id?.toString() ?? ''),
+      userId: parsedUserId,
     );
   }
 }

@@ -1735,6 +1735,7 @@ class _WalletPageState extends State<WalletPage> {
                     null,
                     contact.imageUrl ?? contact.imageAsset,
                     () => _showSendMoney(context, initial: contact),
+                    onLongPress: () => _showRemoveContactDialog(context, contact),
                   );
                 }),
             ],
@@ -1745,7 +1746,7 @@ class _WalletPageState extends State<WalletPage> {
   }
 
   Widget _quickContact(
-      String name, IconData? icon, String? img, VoidCallback onTap) {
+      String name, IconData? icon, String? img, VoidCallback onTap, {VoidCallback? onLongPress}) {
     ImageProvider? imageProvider;
     if (img != null) {
       if (img.startsWith('http')) {
@@ -1757,6 +1758,7 @@ class _WalletPageState extends State<WalletPage> {
 
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(18),
       child: Container(
         margin: const EdgeInsets.only(right: 16),
@@ -3543,6 +3545,45 @@ class _WalletPageState extends State<WalletPage> {
     } finally {
       FlutterError.onError = previousOnError;
       _logAddContact('error hook restored');
+    }
+  }
+
+  Future<void> _showRemoveContactDialog(
+      BuildContext context, WalletContact contact) async {
+    final contactId = contact.contactId ?? contact.userId;
+    if (contactId == null) {
+      _notifyWallet('Cannot remove', 'Contact ID not available.');
+      return;
+    }
+
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        title: Text('Remove ${contact.name}?'),
+        content: const Text(
+            'Are you sure you want to remove this contact from your quick link ups?'),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Get.back(result: true),
+            child: const Text('Remove', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await LinkupApiService.removeWalletContact(contactId);
+        _notifyWallet(
+            'Contact removed', '${contact.name} was removed from contacts.');
+        await _loadWalletApi(reason: 'after-remove-contact');
+      } catch (e) {
+        _notifyWallet('Error', 'Could not remove contact: $e');
+      }
     }
   }
 

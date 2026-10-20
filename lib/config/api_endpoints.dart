@@ -14,6 +14,7 @@ class ApiEndpoints {
   /// Wallet balance, transactions and contacts.
   static const String regularUserWallet = '/api/regular-user/user/wallet';
   static const String regularUserWalletContact = '/api/regular-user/wallet/contact';
+  static String regularUserWalletContactRemove(int id) => '/api/regular-user/wallet/contact/$id';
   static const String regularUserWalletSendMoney = '/api/regular-user/wallet/send-money';
   static const String regularUserWalletRequestMoney = '/api/regular-user/wallet/request-money';
   static const String regularUserWalletActivity = '/api/regular-user/wallet/activity';
@@ -27,6 +28,7 @@ class ApiEndpoints {
   static String regularUserWalletRejectRequest(int id) => '/api/regular-user/wallet/requested-money/$id/reject';
   static String regularUserWalletCancelRequest(int id) => '/api/regular-user/wallet/requested-money/$id/cancel';
   static const String regularUserWalletRequestedMoneyList = '/api/regular-user/wallet/requested-money';
+  static const String regularUserWalletAsuesActive = '/api/regular-user/wallet/asues/active';
   static const String regularUserWalletAsueStore = '/api/regular-user/wallet/asues/store';
   static String regularUserWalletAsueAcceptParticipation(int asueId) =>
       '/api/regular-user/wallet/asues/$asueId/accept-participation';

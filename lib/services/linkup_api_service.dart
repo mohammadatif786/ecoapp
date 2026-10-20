@@ -17,6 +17,7 @@ import 'package:link_up/model/nightlife_model.dart';
 import 'package:link_up/model/home_advertisement.dart';
 import 'package:link_up/model/home_feed_result.dart';
 import 'package:link_up/model/wallet_result.dart';
+import 'package:link_up/services/wallet_demo_service.dart';
 import 'package:link_up/model/chat_list_model.dart';
 import 'package:link_up/model/chatModel.dart';
 import 'package:link_up/model/friend_request_model.dart';
@@ -2308,14 +2309,47 @@ class LinkupApiService {
     return WalletResult.empty;
   }
 
-  /// `POST /api/regular-user/wallet/contact` (multipart `contact_user_id`).
-  static Future<void> addWalletContact({required int contactUserId}) async {
+  /// `GET /api/regular-user/wallet/contact`
+  static Future<List<WalletContact>> fetchWalletContacts() async {
     final token = await getToken();
+    final response = await http.get(
+      _uri(ApiEndpoints.regularUserWalletContact),
+      headers: _headers(token: token, json: false),
+    );
+    final body = _decodeBody(response);
+    if (response.statusCode >= 400) _throwFromResponse(response);
+    if (body is! Map) return const [];
+    final map = Map<String, dynamic>.from(body);
+    final raw = map['contacts'] ?? map['data'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => WalletContact.fromUserMap(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
+  /// `POST /api/regular-user/wallet/contact` (`contact_user_id`, optional `name`).
+  static Future<void> addWalletContact({required int contactUserId, String? name}) async {
+    final token = await getToken();
+    final fields = <String, String>{
+      'contact_user_id': contactUserId.toString(),
+      if (name != null && name.isNotEmpty) 'name': name,
+    };
     final response = await _sendMultipart(
       'POST',
       ApiEndpoints.regularUserWalletContact,
       token: token,
-      fields: {'contact_user_id': contactUserId.toString()},
+      fields: fields,
+    );
+    if (response.statusCode >= 400) _throwFromResponse(response);
+  }
+
+  /// `DELETE /api/regular-user/wallet/contact/{contact_id}`
+  static Future<void> removeWalletContact(int contactId) async {
+    final token = await getToken();
+    final response = await http.delete(
+      _uri(ApiEndpoints.regularUserWalletContactRemove(contactId)),
+      headers: _headers(token: token),
     );
     if (response.statusCode >= 400) _throwFromResponse(response);
   }
@@ -2446,6 +2480,22 @@ class LinkupApiService {
         .map((item) =>
             WalletActivityItem.fromJson(Map<String, dynamic>.from(item)))
         .toList();
+  }
+
+  /// `GET /api/regular-user/wallet/asues/active`
+  static Future<WalletActiveAsue?> fetchActiveAsue() async {
+    final token = await getToken();
+    final response = await http.get(
+      _uri(ApiEndpoints.regularUserWalletAsuesActive),
+      headers: _headers(token: token, json: false),
+    );
+    final body = _decodeBody(response);
+    if (response.statusCode >= 400) _throwFromResponse(response);
+    if (body is! Map) return null;
+    final map = Map<String, dynamic>.from(body);
+    final activeMap = map['activeAsue'] ?? map['active_asue'] ?? map['data'];
+    if (activeMap == null) return null;
+    return WalletActiveAsue.tryFromJson(activeMap);
   }
 
   /// `POST /api/regular-user/wallet/asues/store`

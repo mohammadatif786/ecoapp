@@ -17,6 +17,7 @@ import '../services/linkup_api_service.dart';
 import '../model/wallet_result.dart';
 import 'wallet_pin_sheet.dart';
 import 'requested_money_modal.dart';
+import '../widgets/custom_qr_code_widget.dart';
 import 'package:link_up/ui/notification_page.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
@@ -50,7 +51,6 @@ class _WalletPageState extends State<WalletPage> {
   final ChatController chatController =
       Get.find(tag: ChatController().toString());
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _payBillsKey = GlobalKey();
   double _walletBalance = WalletDemoService.fallbackWalletBalance;
   List<WalletCurrency> _currencies = WalletDemoService.fallbackCurrencies;
   WalletSendLimits _sendLimits =
@@ -95,20 +95,6 @@ class _WalletPageState extends State<WalletPage> {
     if (widget.showSavings) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         setState(() => _showSavingsPanel = true);
-      });
-    }
-    if (widget.scrollToPayBills) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        setState(() => _showSavingsPanel = false);
-        Future.delayed(const Duration(milliseconds: 300), () {
-          final context = _payBillsKey.currentContext;
-          if (context != null) {
-            Scrollable.ensureVisible(context,
-                duration: const Duration(milliseconds: 600),
-                curve: Curves.easeInOut,
-                alignment: 0.1);
-          }
-        });
       });
     }
   }
@@ -1295,16 +1281,15 @@ class _WalletPageState extends State<WalletPage> {
                     const SizedBox(height: 12),
                     _coinsCard(context),
                     const SizedBox(height: 12),
-                    _actionGrid(context),
-                    const SizedBox(height: 18),
                     _quickLinkUps(context),
+                    const SizedBox(height: 18),
+                    _actionGrid(context),
                     const SizedBox(height: 18),
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 250),
                       child: _showSavingsPanel
                           ? _linkUpSaveCard(context)
-                          : Container(
-                              key: _payBillsKey, child: _payBills(context)),
+                          : const SizedBox.shrink(),
                     ),
                     const SizedBox(height: 18),
                     _featureGrid(context),
@@ -1644,7 +1629,7 @@ class _WalletPageState extends State<WalletPage> {
         'Pay Bills',
         Icons.receipt_long,
         const Color(0xff0ea5e9),
-        () => setState(() => _showSavingsPanel = false)
+        () => _showPayBillsModal(context)
       ],
       [
         'Merchant',
@@ -1780,109 +1765,6 @@ class _WalletPageState extends State<WalletPage> {
                     color: Color(0xff334155))),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _payBills(BuildContext context) {
-    return Container(
-      key: const ValueKey('pay-bills-card'),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.025), blurRadius: 12)
-          ]),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.receipt_long,
-                  color: Color(0xff169bed), size: 18),
-              const SizedBox(width: 8),
-              const Text('Pay Bills',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
-                      color: Color(0xff1e293b))),
-              const Spacer(),
-              InkWell(
-                onTap: () => _showAddBiller(context),
-                borderRadius: BorderRadius.circular(12),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  child: Text('+ Add Biller',
-                      style: TextStyle(
-                          color: Color(0xff0284e8),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _billItem(context, 'BPL Electricity', 'Due Jun 18', Icons.bolt,
-              const Color(0xff2d98e5)),
-          _billItem(context, 'Cable Bahamas Internet', 'Due Jun 22', Icons.wifi,
-              const Color(0xff2d98e5)),
-          _billItem(context, 'Water & Sewerage', 'Due Jun 23', Icons.water_drop,
-              const Color(0xff2d98e5)),
-          _billItem(context, 'BTC Mobile', 'Due Jun 28', Icons.phone_android,
-              const Color(0xff2d98e5)),
-        ],
-      ),
-    );
-  }
-
-  Widget _billItem(BuildContext context, String name, String due, IconData icon,
-      Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        children: [
-          Container(
-            height: 36,
-            width: 36,
-            decoration: BoxDecoration(
-                color: color.withOpacity(0.10), shape: BoxShape.circle),
-            child: Icon(icon, color: color, size: 19),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 13,
-                        color: Color(0xff1e293b))),
-                const SizedBox(height: 2),
-                Text(due,
-                    style: const TextStyle(
-                        color: Color(0xff94a3b8),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700)),
-              ],
-            ),
-          ),
-          InkWell(
-            onTap: () => _showPayBill(context, name, due, icon),
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-              decoration: BoxDecoration(
-                  color: const Color(0xff0ea5e9),
-                  borderRadius: BorderRadius.circular(20)),
-              child: const Text('Pay',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 11)),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -5020,6 +4902,7 @@ class _WalletPageState extends State<WalletPage> {
 
   void _showWalletTopUps(BuildContext context, {int initialTab = 0}) {
     int selectedTab = initialTab; // 0: Top Up Cash, 1: Buy Coins
+    int selectedPaymentMethod = 0; // 0: Card, 1: Bank Account
     final amountController = TextEditingController();
 
     final packs = <Map<String, dynamic>>[
@@ -5145,6 +5028,7 @@ class _WalletPageState extends State<WalletPage> {
                         alignment: Alignment.centerLeft,
                         child: _fieldLabel('AMOUNT (USD)'),
                       ),
+                      const SizedBox(height: 6),
                       TextField(
                         controller: amountController,
                         keyboardType: const TextInputType.numberWithOptions(
@@ -5177,6 +5061,156 @@ class _WalletPageState extends State<WalletPage> {
                                   color: Color(0xff2d98e5), width: 1.5)),
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setDialogState(() => selectedPaymentMethod = 0),
+                              child: Container(
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: selectedPaymentMethod == 0
+                                      ? const Color(0xff2d98e5)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: selectedPaymentMethod == 0
+                                        ? const Color(0xff2d98e5)
+                                        : const Color(0xffe2e8f0),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.credit_card,
+                                      size: 18,
+                                      color: selectedPaymentMethod == 0
+                                          ? Colors.white
+                                          : const Color(0xff334155),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Card',
+                                      style: TextStyle(
+                                        color: selectedPaymentMethod == 0
+                                            ? Colors.white
+                                            : const Color(0xff334155),
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setDialogState(() => selectedPaymentMethod = 1),
+                              child: Container(
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: selectedPaymentMethod == 1
+                                      ? const Color(0xff2d98e5)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: selectedPaymentMethod == 1
+                                        ? const Color(0xff2d98e5)
+                                        : const Color(0xffe2e8f0),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.account_balance,
+                                      size: 18,
+                                      color: selectedPaymentMethod == 1
+                                          ? Colors.white
+                                          : const Color(0xff334155),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Bank Account',
+                                      style: TextStyle(
+                                        color: selectedPaymentMethod == 1
+                                            ? Colors.white
+                                            : const Color(0xff334155),
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xffe2e8f0)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xff334155),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  selectedPaymentMethod == 0 ? 'MC' : 'BANK',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    selectedPaymentMethod == 0
+                                        ? 'Mastercard •••• 9010'
+                                        : 'Scotiabank Checking •••• 4421',
+                                    style: const TextStyle(
+                                      color: Color(0xff0f172a),
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    selectedPaymentMethod == 0
+                                        ? 'Issued by Scotiabank • funds land instantly'
+                                        : 'Direct ACH transfer • 1-2 business days',
+                                    style: const TextStyle(
+                                      color: Color(0xff94a3b8),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 18),
                       _gradientAction('Add Funds', () async {
                         final amount = _parseAmount(amountController.text);
@@ -5191,7 +5225,7 @@ class _WalletPageState extends State<WalletPage> {
                             const Duration(milliseconds: 200));
                         if (!mounted) return;
                         await _startStripePayment(
-                          purpose: 'cash_deposit',
+                          purpose: selectedPaymentMethod == 0 ? 'cash_deposit' : 'bank_deposit',
                           amount: amount,
                           successTitle: 'Payment successful',
                           successMessage:
@@ -5524,18 +5558,6 @@ class _WalletPageState extends State<WalletPage> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _transferBox(
-                      title: 'To Coins',
-                      icon: Icons.diamond_outlined,
-                      onTap: () {
-                        _closeWalletOverlay();
-                        Future.delayed(const Duration(milliseconds: 150),
-                            () => _showWalletTopUps(context, initialTab: 1));
-                      },
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -5656,16 +5678,7 @@ class _WalletPageState extends State<WalletPage> {
                     icon: const Icon(Icons.close))
               ]),
               const SizedBox(height: 10),
-              Container(
-                  width: 220,
-                  height: 220,
-                  decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xffe2e8f0))),
-                  child: const Center(
-                      child: Icon(Icons.qr_code_2,
-                          size: 150, color: Color(0xff0f172a)))),
+              const CustomQrCodeWidget(size: 220),
               const SizedBox(height: 12),
               const Text('@cassius · Scan to send me money',
                   style: TextStyle(
@@ -6277,6 +6290,160 @@ class _WalletPageState extends State<WalletPage> {
                   fontSize: 9,
                   fontWeight: FontWeight.bold,
                   color: Color(0xff334155))),
+        ],
+      ),
+    );
+  }
+
+  void _showPayBillsModal(BuildContext context) {
+    Get.dialog(
+      _modalSurface(
+        context,
+        Container(
+          width: _ui(context, 382),
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.78),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 30,
+                  offset: const Offset(0, 18))
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 18, 12, 18),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                      colors: [Color(0xff0ea5e9), Color(0xff0284e8)]),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Pay Bills',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 20)),
+                          SizedBox(height: 2),
+                          Text('Manage and pay your utility bills.',
+                              style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Get.back(),
+                      icon: const Icon(Icons.close,
+                          color: Colors.white, size: 22),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          const Spacer(),
+                          InkWell(
+                            onTap: () {
+                              Get.back();
+                              _showAddBiller(context);
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              child: Text('+ Add Biller',
+                                  style: TextStyle(
+                                      color: Color(0xff0284e8),
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 12)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _billItem(context, 'BPL Electricity', 'Due Jun 18',
+                          Icons.bolt, const Color(0xff2d98e5)),
+                      _billItem(context, 'Cable Bahamas Internet',
+                          'Due Jun 22', Icons.wifi, const Color(0xff2d98e5)),
+                      _billItem(context, 'Water & Sewerage', 'Due Jun 23',
+                          Icons.water_drop, const Color(0xff2d98e5)),
+                      _billItem(context, 'BTC Mobile', 'Due Jun 28',
+                          Icons.phone_android, const Color(0xff2d98e5)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _billItem(BuildContext context, String name, String due, IconData icon,
+      Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          Container(
+            height: 36,
+            width: 36,
+            decoration: BoxDecoration(
+                color: color.withOpacity(0.10), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 19),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        color: Color(0xff1e293b))),
+                const SizedBox(height: 2),
+                Text(due,
+                    style: const TextStyle(
+                        color: Color(0xff94a3b8),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+          InkWell(
+            onTap: () => _showPayBill(context, name, due, icon),
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+              decoration: BoxDecoration(
+                  color: const Color(0xff0ea5e9),
+                  borderRadius: BorderRadius.circular(20)),
+              child: const Text('Pay',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11)),
+            ),
+          ),
         ],
       ),
     );

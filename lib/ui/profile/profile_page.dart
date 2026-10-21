@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../widgets/linkup_current_user.dart';
+import '../../widgets/custom_qr_code_widget.dart';
 import 'package:link_up/helper/router/route_path.dart';
 import 'package:link_up/ui/chat_home_page.dart';
 import 'package:link_up/ui/eats_page.dart';
@@ -3176,12 +3177,7 @@ class _ProfilePageState extends State<ProfilePage> {
               Text(_currentFullName, style: TextStyle(color: Colors.black, fontSize: _font(context, 16), fontWeight: FontWeight.w900)),
               Text('@${_currentFirstName.toLowerCase()}', style: TextStyle(color: const Color(0xff8ca0ba), fontSize: _font(context, 12), fontWeight: FontWeight.w700)),
               SizedBox(height: _ui(context, 14)),
-              Container(
-                width: _ui(context, 210),
-                height: _ui(context, 210),
-                color: Colors.white,
-                child: CustomPaint(painter: _QrPainter()),
-              ),
+              CustomQrCodeWidget(size: _ui(context, 210)),
               SizedBox(height: _ui(context, 8)),
               Text('Scan to view my LinkUp profile', style: TextStyle(color: const Color(0xff8ca0ba), fontSize: _font(context, 11))),
               SizedBox(height: _ui(context, 14)),

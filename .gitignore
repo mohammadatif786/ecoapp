@@ -35,6 +35,7 @@ coverage
 # Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-task-files)
 .grunt
 
+temp_auto_push.bat
 # Bower dependency directory (https://bower.io/)
 bower_components
 
@@ -73,3 +74,4 @@ android/.idea/
 # FVM Version Cache
 .fvm/
 branch_structure.json
+.gitignore

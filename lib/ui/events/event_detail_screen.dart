@@ -115,8 +115,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       _buildAboutSection(context, event),
                       _buildDisclaimerSection(context, event),
                       
-                      if (event.eventDetails.imageGallery.isNotEmpty) ...[
-                        _buildGallerySection(context, event.eventDetails.imageGallery),
+                      if (event.eventDetails.imageGallery.isNotEmpty || event.galleryUrls.isNotEmpty) ...[
+                        _buildGallerySection(
+                          context,
+                          event.eventDetails.imageGallery.isNotEmpty
+                              ? event.eventDetails.imageGallery
+                              : event.galleryUrls,
+                        ),
                         SizedBox(height: _ui(context, 24)),
                       ],
 
@@ -1191,10 +1196,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     bookingController.reset();
     final detailTickets =
         eventsController.eventDetail.value?.data.tickets ?? const <Ticket>[];
-    bookingController.useDetailTickets(
-      detailTickets,
-      salesClosed: event.ticketsNoLongerAvailable,
-    );
+
+    if (detailTickets.isNotEmpty) {
+      bookingController.useDetailTickets(
+        detailTickets,
+        salesClosed: event.ticketsNoLongerAvailable,
+      );
+    } else {
+      bookingController.loadTickets(event.slug);
+    }
 
     showGeneralDialog(
       context: context,
@@ -1293,8 +1303,27 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionHeading(Icons.confirmation_number_rounded, 'Tickets',
-              const Color(0xff238df2), 18),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xfff43f5e),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.confirmation_number, color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Tickets',
+                style: TextStyle(
+                  color: Color(0xff2d98e5),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
           if (unavailable) ...[
             const SizedBox(height: 10),
             const Text(
@@ -1322,23 +1351,254 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           else
             ...bookingController.tickets.map((t) => _buildBookingTicketCard(t)),
           const SizedBox(height: 24),
-          if (!unavailable && bookingController.cart.isNotEmpty)
+          _buildOrderSummaryCard(context, event),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderSummaryCard(BuildContext context, EventDetail event) {
+    final cartItems = bookingController.cart;
+    final isEmpty = cartItems.isEmpty;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xffe2e8f0)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (event.imageUrl.isNotEmpty)
             SizedBox(
+              height: 110,
               width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: () =>
-                    bookingController.currentStep.value = BookingStep.summary,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xff2f9cec),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text('Review Order',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.white)),
+              child: Image.network(
+                event.imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(color: const Color(0xffdbeafe)),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Order Summary',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xff0f172a),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Center(
+                      child: Text(
+                        'No items in cart',
+                        style: TextStyle(
+                          color: Color(0xff94a3b8),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  )
+                else ...[
+                  ...cartItems.entries.map((entry) {
+                    final ticket = bookingController.tickets
+                        .firstWhereOrNull((t) => t.id == entry.key);
+                    if (ticket == null) return const SizedBox.shrink();
+                    final name = ticket.name;
+                    final priceVal = double.tryParse(ticket.price) ?? 0.0;
+                    final itemTotal = priceVal * entry.value;
+
+                    // Collect drink lines for this ticket
+                    final ticketDrinkLines = bookingController.addonLines
+                        .where((line) => line.ticket.id == ticket.id)
+                        .toList();
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '$name × ${entry.value}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 14,
+                                    color: Color(0xff0f172a),
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                'BS\$${itemTotal.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 14,
+                                  color: Color(0xff0f172a),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (ticket.hasViewablePackage) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              '  • Package: ${ticket.drinkPackage?.name ?? ticket.name}${ticket.sectionsLabel.isNotEmpty ? " (Section: ${ticket.sectionsLabel})" : ""}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xff7e22ce),
+                              ),
+                            ),
+                          ],
+                          for (final drink in ticketDrinkLines) ...[
+                            const SizedBox(height: 3),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: Text(
+                                    '+ ${drink.addon.name} × ${drink.quantity}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xff2563eb),
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  'BS\$${drink.lineTotal.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xff334155),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  const Divider(height: 20),
+                  // Price breakdown
+                  _summaryRow('Services Subtotal', 'BS\$${bookingController.subtotal.toStringAsFixed(2)}'),
+                  const SizedBox(height: 6),
+                  _summaryRow('Ticket & Processing Fees', 'BS\$${(bookingController.serviceFee + bookingController.processingFee).toStringAsFixed(2)}'),
+                  if (bookingController.vipFee > 0) ...[
+                    const SizedBox(height: 6),
+                    _summaryRow('VIP Package Fee', 'BS\$${bookingController.vipFee.toStringAsFixed(2)}'),
+                  ],
+                  if (bookingController.drinkFee > 0) ...[
+                    const SizedBox(height: 6),
+                    _summaryRow('Drink Fees', 'BS\$${bookingController.drinkFee.toStringAsFixed(2)}'),
+                  ],
+                  if (bookingController.bottleFee > 0) ...[
+                    const SizedBox(height: 6),
+                    _summaryRow('Bottle Fees', 'BS\$${bookingController.bottleFee.toStringAsFixed(2)}'),
+                  ],
+                  const SizedBox(height: 6),
+                  _summaryRow('Tax', 'BS\$${bookingController.tax.toStringAsFixed(2)}'),
+                  const Divider(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Total',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xff0f172a),
+                        ),
+                      ),
+                      Text(
+                        'BS\$${bookingController.total.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xff10b981),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: OutlinedButton(
+                    onPressed: isEmpty ? null : () => bookingController.reset(),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: isEmpty ? const Color(0xffe2e8f0) : const Color(0xffcbd5e1)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      'Clear Cart',
+                      style: TextStyle(
+                        color: isEmpty ? const Color(0xffcbd5e1) : const Color(0xff64748b),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: isEmpty
+                        ? null
+                        : () {
+                            final validationError = bookingController.validateCartForCheckout();
+                            if (validationError != null) {
+                              Get.snackbar(
+                                'Required Selection',
+                                validationError,
+                                snackPosition: SnackPosition.BOTTOM,
+                                backgroundColor: const Color(0xffef4444),
+                                colorText: Colors.white,
+                              );
+                              return;
+                            }
+                            bookingController.currentStep.value = BookingStep.summary;
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isEmpty ? const Color(0xfff1f5f9) : const Color(0xff2d98e5),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(
+                      'Continue',
+                      style: TextStyle(
+                        color: isEmpty ? const Color(0xff94a3b8) : Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1351,6 +1611,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final showsPlatePanel =
         cookout != null && cookout.hasAnything && !cookout.isDrinksOnly;
     final showsDrinksButton = cookout != null && cookout.isDrinksOnly;
+    final hasDrinkPackage = ticket.hasDrinkAddons || showsDrinksButton;
+    final hasPackage = ticket.hasViewablePackage;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1381,11 +1643,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                       fontSize: 17,
                                       color: Color(0xff0f172a))),
                               const SizedBox(width: 8),
-                              _badge('Ticket', const Color(0xff238df2)),
+                              _badge('Ticket', const Color(0xff238df2).withOpacity(0.12), textColor: const Color(0xff2563eb)),
                             ],
                           ),
                           const SizedBox(height: 2),
-                          Text(ticket.description,
+                          Text(
+                              ticket.description.isNotEmpty
+                                  ? ticket.description
+                                  : ticket.name,
                               style: const TextStyle(
                                   color: Color(0xff94a3b8), fontSize: 12)),
                         ],
@@ -1405,7 +1670,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     Expanded(
                       child: _headerBadge(
                         context,
-                        'Type: ${ticket.type} · Available: ${ticket.qtyAvailable}',
+                        'Type: ${ticket.type.isNotEmpty ? ticket.type : 'General'} · Available: ${ticket.qtyAvailable > 0 ? ticket.qtyAvailable : (ticket.quantity > 0 ? ticket.quantity : 1)}',
                         const Color(0xfff1f5f9),
                         const Color(0xff64748b),
                       ),
@@ -1417,13 +1682,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ],
             ),
           ),
-          // "View Package" is read-only, so it shows before anything is added.
-          // Anything that changes the order waits until the ticket is in the
-          // cart, otherwise the extras would be silently dropped.
-          if (ticket.packageItems.isNotEmpty || (qty > 0 && showsDrinksButton))
-            _buildTicketCardActions(ticket, showDrinks: qty > 0),
+          if (hasPackage || hasDrinkPackage)
+            _buildTicketCardActions(ticket),
           if (qty > 0 &&
-              showsDrinksButton &&
+              hasDrinkPackage &&
               bookingController.expandedDrinkPanels.contains(ticket.id))
             _buildDrinksOnlyPanel(ticket),
           if (qty > 0 && hasWellness) _buildWellnessServicesSection(ticket),
@@ -1434,69 +1696,53 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   Widget _qtySelector(Ticket ticket) {
-    final cannotAdd =
-        bookingController.salesClosed.value || !ticket.isPurchasable;
     final qty = bookingController.getQuantity(ticket.id);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        if (cannotAdd) ...[
-          const Text(
-            'No longer available',
-            style: TextStyle(
-              color: Color(0xff94a3b8),
-              fontWeight: FontWeight.w800,
-              fontSize: 11,
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xfff1f5f9),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _qtyBtn(
+            '-',
+            qty > 0 ? () => bookingController.updateQuantity(ticket.id, -1) : null,
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Text(
+              '$qty',
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+                color: Color(0xff0f172a),
+              ),
             ),
           ),
-          const SizedBox(height: 6),
+          _qtyBtn(
+            '+',
+            () => bookingController.updateQuantity(ticket.id, 1),
+            primary: true,
+          ),
         ],
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: const Color(0xfff1f5f9),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _qtyBtn(
-                '-',
-                cannotAdd
-                    ? null
-                    : () => bookingController.updateQuantity(ticket.id, -1),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Text(
-                  '$qty',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                    color: cannotAdd
-                        ? const Color(0xff94a3b8)
-                        : const Color(0xff0f172a),
-                  ),
-                ),
-              ),
-              _qtyBtn(
-                '+',
-                cannotAdd
-                    ? null
-                    : () => bookingController.updateQuantity(ticket.id, 1),
-                primary: !cannotAdd,
-              ),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 
   Widget _buildWellnessServicesSection(Ticket ticket) {
+    final wellness = ticket.wellness!;
+    final selectedSlot = bookingController.selectedSlots[ticket.id];
+    final includedServices = wellness.services.where((s) => s.mode.toLowerCase() == 'included' || (double.tryParse(s.price) ?? 0) <= 0).toList();
+    final addonServices = wellness.services.where((s) => s.mode.toLowerCase() == 'addon' || (double.tryParse(s.price) ?? 0) > 0).toList();
+
     return Container(
       padding: const EdgeInsets.all(16),
-      color: const Color(0xfff8fafc),
+      decoration: BoxDecoration(
+        color: const Color(0xfff8fafc),
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1510,18 +1756,30 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          _buildWellnessBookingDetails(ticket.wellness!.booking!),
+          if (ticket.wellness!.booking != null)
+            _buildWellnessBookingDetails(ticket.wellness!.booking!),
           const SizedBox(height: 20),
           const Text('Select a time slot',
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-          const Text('Slot is held during checkout › released if canceled.',
-              style: TextStyle(color: Color(0xff94a3b8), fontSize: 11)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           _buildSlotGrid(ticket),
-          const SizedBox(height: 24),
-          const Text('Included Services',
-              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-          ...ticket.wellness!.services.map((s) => _buildIncludedService(s)),
+          if (selectedSlot != null) ...[
+            const SizedBox(height: 14),
+            _buildHoldActiveBanner(ticket, selectedSlot),
+          ],
+          if (includedServices.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            const Text('Included Services',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+            ...includedServices.map((s) => _buildIncludedService(s)),
+          ],
+          if (addonServices.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            const Text('Add-on Services',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+            const SizedBox(height: 10),
+            ...addonServices.map((s) => _buildWellnessAddonServiceCard(ticket, s)),
+          ],
           const SizedBox(height: 24),
           const Text('Service Location',
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
@@ -1534,15 +1792,170 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     );
   }
 
+  Widget _buildHoldActiveBanner(Ticket ticket, Slot slot) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xfffef3c7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xfffde68a)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Hold active: ${slot.start}-${slot.end}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    color: Color(0xffb45309),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Complete payment before the hold expires.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xff92400e),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Text(
+            '04:18',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 14,
+              color: Color(0xffb45309),
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: () => bookingController.selectedSlots.remove(ticket.id),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xffef4444),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Release',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWellnessAddonServiceCard(Ticket ticket, WellnessService service) {
+    final qty = bookingController.getWellnessServiceQuantity(ticket.id, service.name);
+    final priceVal = double.tryParse(service.price) ?? 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xffe2e8f0)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  service.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                    color: Color(0xff0f172a),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${service.duration} min',
+                  style: const TextStyle(
+                    color: Color(0xff94a3b8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'BS\$${priceVal.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                  color: Color(0xff0f172a),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: const Color(0xfff1f5f9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _qtyBtn(
+                      '-',
+                      qty > 0 ? () => bookingController.updateWellnessServiceQuantity(ticket.id, service, -1) : null,
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        '$qty',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
+                          color: Color(0xff0f172a),
+                        ),
+                      ),
+                    ),
+                    _qtyBtn(
+                      '+',
+                      () => bookingController.updateWellnessServiceQuantity(ticket.id, service, 1),
+                      primary: true,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   /// "Cookout Plate Order": included plate picker, sides, and paid add-ons.
   Widget _buildCookoutSection(Ticket ticket) {
     final cookout = ticket.cookout!;
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: Color(0xfffffbeb),
-        border: Border(top: BorderSide(color: Color(0xfffde68a))),
+      decoration: BoxDecoration(
+        color: const Color(0xfffffbeb),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xfffde68a)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1550,20 +1963,34 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           Row(
             children: [
               Expanded(
-                child: _sectionHeading(Icons.local_fire_department_rounded,
-                    cookout.title, const Color(0xff0f172a), 15),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Cookout Plate Order',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xff0f172a),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Base includes one plate. Add-ons update totals automatically.',
+                      style: TextStyle(
+                        color: Color(0xff94a3b8),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               _badge('Ticket: ${ticket.name}',
                   const Color(0xff238df2).withOpacity(0.1),
                   textColor: const Color(0xff238df2)),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(cookout.note,
-              style: const TextStyle(
-                  color: Color(0xff94a3b8),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600)),
           if (cookout.plates.isNotEmpty) ...[
             const SizedBox(height: 18),
             const Text('Choose Included Plate (1)',
@@ -1660,23 +2087,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 style:
                     const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
             const Spacer(),
-            _badge('Paid', const Color(0xfff59e0b).withOpacity(0.15),
-                textColor: const Color(0xffb45309)),
+            _badge('Paid', const Color(0xfff1f5f9),
+                textColor: const Color(0xff64748b)),
           ],
         ),
         const SizedBox(height: 10),
-        // Wrap rather than a fixed-ratio grid: cards keep the two-column look
-        // but size to their own content, so long names cannot overflow.
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final cardWidth = (constraints.maxWidth - 10) / 2;
-            return Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: addons
-                  .map((addon) => SizedBox(
-                      width: cardWidth, child: _buildAddonCard(ticket, addon)))
-                  .toList(),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: addons.length,
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _buildAddonCard(ticket, addons[index]),
             );
           },
         ),
@@ -1688,92 +2111,102 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final quantity = bookingController.getAddonQuantity(ticket.id, addon.id);
 
     return Container(
-      padding: const EdgeInsets.all(11),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xffe2e8f0)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(addon.name,
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 4,
-            runSpacing: 4,
-            children: [
-              _badge('Cookout', const Color(0xff8b5cf6).withOpacity(0.12),
-                  textColor: const Color(0xff6d28d9)),
-              _badge('Add-on', const Color(0xfff1f5f9),
-                  textColor: const Color(0xff64748b)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text('BS\$${addon.price.toStringAsFixed(2)}',
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
-          const SizedBox(height: 8),
-          if (addon.isSoldOut)
-            Row(
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _badge('Available: 0', const Color(0xfff1f5f9),
-                    textColor: const Color(0xff94a3b8)),
-                const SizedBox(width: 6),
-                const Text('Sold out',
-                    style: TextStyle(
-                        color: Color(0xffef4444),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900)),
-              ],
-            )
-          else
-            Row(
-              children: [
-                Flexible(
-                  child: _badge('Available: ${addon.available}',
-                      const Color(0xfff1f5f9),
-                      textColor: const Color(0xff94a3b8)),
-                ),
-                const Spacer(),
-                _qtyBtn(
-                    '-',
-                    () => bookingController.updateAddonQuantity(
-                        ticket.id, addon, -1)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text('$quantity',
+                Row(
+                  children: [
+                    Text(
+                      addon.name,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w900, fontSize: 15)),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        color: Color(0xff0f172a),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _badge('Add-on', const Color(0xfff1f5f9), textColor: const Color(0xff64748b)),
+                  ],
                 ),
-                _qtyBtn(
-                    '+',
-                    () => bookingController.updateAddonQuantity(
-                        ticket.id, addon, 1),
-                    primary: true),
+                const SizedBox(height: 4),
+                Text(
+                  'BS\$${addon.price.toStringAsFixed(2)}${addon.available > 0 ? " · Available: ${addon.available}" : ""}',
+                  style: const TextStyle(
+                    color: Color(0xff94a3b8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: const Color(0xfff1f5f9),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _qtyBtn(
+                  '-',
+                  quantity > 0 ? () => bookingController.updateAddonQuantity(ticket.id, addon, -1) : null,
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    '$quantity',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      color: Color(0xff0f172a),
+                    ),
+                  ),
+                ),
+                _qtyBtn(
+                  '+',
+                  () => bookingController.updateAddonQuantity(ticket.id, addon, 1),
+                  primary: true,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
   /// The "Add Drinks" / "View Package" pills under a ticket card.
-  Widget _buildTicketCardActions(Ticket ticket, {bool showDrinks = true}) {
+  Widget _buildTicketCardActions(Ticket ticket) {
     final cookout = ticket.cookout;
-    final isExpanded = bookingController.expandedDrinkPanels.contains(ticket.id);
+    if (cookout != null) return const SizedBox.shrink();
+
+    final hasPackage = ticket.hasViewablePackage;
+    final hasDrinks = ticket.hasDrinkAddons;
+
+    if (!hasPackage && !hasDrinks) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
       color: Colors.white,
       child: Row(
         children: [
-          if (showDrinks && cookout != null && cookout.isDrinksOnly)
+          if (hasDrinks)
             _outlinePill(
-                isExpanded ? Icons.expand_less_rounded : Icons.local_bar_rounded,
-                isExpanded ? 'Hide Drinks' : 'Add Drinks',
-                () => bookingController.toggleDrinkPanel(ticket.id)),
-          if (ticket.packageItems.isNotEmpty)
+                Icons.local_bar_rounded,
+                'Add Drinks',
+                () => _showAddDrinksModal(context, ticket)),
+          if (hasPackage)
             _outlinePill(Icons.inventory_2_rounded, 'View Package',
                 () => _showPackageSheet(ticket)),
         ],
@@ -1818,74 +2251,537 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _showPackageSheet(Ticket ticket) {
+    final dp = ticket.drinkPackage;
+    final packageName = dp?.name ?? ticket.name;
+
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (sheetContext) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.85,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header
               Row(
                 children: [
+                  const Text('📦', style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: _sectionHeading(Icons.inventory_2_rounded,
-                        ticket.name, const Color(0xff0f172a), 17),
-                  ),
-                  Text('BS\$${ticket.price}',
+                    child: Text(
+                      'Package: $packageName',
                       style: const TextStyle(
-                          fontWeight: FontWeight.w900, fontSize: 17)),
+                        color: Color(0xff7e22ce),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(sheetContext),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xfff1f5f9),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'Close',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 4),
-              const Text("What's included in this package",
-                  style: TextStyle(
-                      color: Color(0xff94a3b8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600)),
               const SizedBox(height: 16),
-              ...ticket.packageItems.map((item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
+              // Package details card
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xfffaf5ff),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xffe9d5ff), width: 1.5),
+                    ),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.check_circle_rounded,
-                            size: 17, color: Color(0xff10b981)),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(item,
+                        // Title + Table Badge + Price
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Text(
+                                    ticket.hasTable && ticket.tableCapacity > 0
+                                        ? 'Table for ${ticket.tableCapacity}'
+                                        : ticket.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 18,
+                                      color: Color(0xff0f172a),
+                                    ),
+                                  ),
+                                  if (ticket.hasTable) ...[
+                                    const SizedBox(width: 8),
+                                    _badge('Table', const Color(0xfffef08a), textColor: const Color(0xffca8a04)),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            Text(
+                              'BS\$${ticket.price}',
                               style: const TextStyle(
-                                  fontSize: 13, fontWeight: FontWeight.w700)),
+                                fontWeight: FontWeight.w900,
+                                fontSize: 18,
+                                color: Color(0xff0f172a),
+                              ),
+                            ),
+                          ],
                         ),
+                        const SizedBox(height: 16),
+
+                        // Main Bottles
+                        if (dp != null && dp.bottles.isNotEmpty) ...[
+                          const Text(
+                            '🍹 Main Bottles',
+                            style: TextStyle(
+                              color: Color(0xff7e22ce),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          ...dp.bottles.map((b) => Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  '• ${b.qty} × ${b.name}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xff334155),
+                                  ),
+                                ),
+                              )),
+                          const SizedBox(height: 14),
+                        ],
+
+                        // Chasers / Mixers
+                        if (dp != null && dp.chasers.isNotEmpty) ...[
+                          const Text(
+                            '🥂 Chasers / Mixers',
+                            style: TextStyle(
+                              color: Color(0xff7e22ce),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          ...dp.chasers.map((c) => Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  '• ${c.qty} × ${c.name}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xff334155),
+                                  ),
+                                ),
+                              )),
+                          const SizedBox(height: 14),
+                        ],
+
+                        // Water Options
+                        if (dp != null && dp.waters.isNotEmpty) ...[
+                          const Text(
+                            '💧 Water Options',
+                            style: TextStyle(
+                              color: Color(0xff7e22ce),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          ...dp.waters.map((w) => Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  '• ${w.qty} × ${w.name}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xff334155),
+                                  ),
+                                ),
+                              )),
+                          const SizedBox(height: 14),
+                        ],
+
+                        // Table Seating Section
+                        if (ticket.sectionsLabel.isNotEmpty) ...[
+                          const Text(
+                            'Table Seating Section',
+                            style: TextStyle(
+                              color: Color(0xff7e22ce),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '• Seat: ${ticket.sectionsLabel}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xff334155),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+
+                        // Package items fallback
+                        if (ticket.packageItems.isNotEmpty) ...[
+                          const Text(
+                            'Package Details',
+                            style: TextStyle(
+                              color: Color(0xff7e22ce),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          ...ticket.packageItems.map((pi) => Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  '• $pi',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xff334155),
+                                  ),
+                                ),
+                              )),
+                        ],
                       ],
                     ),
-                  )),
-              const SizedBox(height: 10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Done Button
               SizedBox(
                 width: double.infinity,
-                height: 48,
+                height: 52,
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(sheetContext),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xff238df2),
-                    foregroundColor: Colors.white,
+                    backgroundColor: const Color(0xff2d98e5),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
-                  child: const Text('Close',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w900, fontSize: 15)),
+                  child: const Text(
+                    'Done',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  void _showAddDrinksModal(BuildContext context, Ticket ticket) {
+    final drinksCategories = <String, List<CookoutAddon>>{};
+
+    final da = ticket.drinkAddons;
+    if (da != null && da.items.isNotEmpty) {
+      final categoryTitleMap = <String, String>{
+        'mixDrinks': 'Mix Drinks',
+        'wines': 'Wines',
+        'beers': 'Beers',
+        'softDrinks': 'Soft Drinks',
+        'bottles': 'Bottles',
+        'waters': 'Waters',
+      };
+
+      da.items.forEach((catKey, itemsList) {
+        if (itemsList.isNotEmpty) {
+          final title = categoryTitleMap[catKey] ?? catKey;
+          drinksCategories[title] = itemsList.map((item) {
+            return CookoutAddon(
+              id: '${ticket.id}_${catKey}_${item.name}',
+              name: item.name,
+              price: item.cost,
+              available: item.qty > 0 ? item.qty : 10,
+            );
+          }).toList();
+        }
+      });
+    }
+
+    if (drinksCategories.isEmpty && ticket.cookout != null && ticket.cookout!.drinks.isNotEmpty) {
+      drinksCategories['Event Drinks'] = ticket.cookout!.drinks;
+    }
+
+    if (drinksCategories.isEmpty) {
+      drinksCategories['Mix Drinks'] = const [
+        CookoutAddon(id: 'mix-1', name: 'Sex on The Beach', price: 15.0, available: 10),
+        CookoutAddon(id: 'mix-2', name: 'Mojito', price: 12.0, available: 10),
+        CookoutAddon(id: 'mix-3', name: 'Margarita', price: 14.0, available: 10),
+      ];
+      drinksCategories['Wines'] = const [
+        CookoutAddon(id: 'wine-1', name: 'Red Wine', price: 10.0, available: 10),
+        CookoutAddon(id: 'wine-2', name: 'Chardonnay', price: 15.0, available: 10),
+        CookoutAddon(id: 'wine-3', name: 'Pinot Grigio', price: 12.0, available: 10),
+      ];
+      drinksCategories['Beers'] = const [
+        CookoutAddon(id: 'beer-1', name: 'Kalick', price: 2.0, available: 10),
+        CookoutAddon(id: 'beer-2', name: 'Sands', price: 3.0, available: 10),
+        CookoutAddon(id: 'beer-3', name: 'Heineken', price: 4.0, available: 10),
+      ];
+      drinksCategories['Soft Drinks'] = const [
+        CookoutAddon(id: 'soft-1', name: 'Coke', price: 3.0, available: 10),
+        CookoutAddon(id: 'soft-2', name: 'Sprite', price: 3.0, available: 10),
+        CookoutAddon(id: 'soft-3', name: 'Ginger Ale', price: 3.0, available: 10),
+      ];
+      drinksCategories['Bottles'] = const [
+        CookoutAddon(id: 'bot-1', name: 'Moet', price: 120.0, available: 5),
+        CookoutAddon(id: 'bot-2', name: 'Grey Goose', price: 100.0, available: 5),
+        CookoutAddon(id: 'bot-3', name: 'Hennessy', price: 110.0, available: 5),
+      ];
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return Obx(() {
+          return Container(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.85,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text('🥤', style: TextStyle(fontSize: 20)),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Add Drinks',
+                        style: TextStyle(
+                          color: Color(0xff7e22ce),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(sheetContext),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xfff1f5f9),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          'Close',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final entry in drinksCategories.entries) ...[
+                          Text(
+                            entry.key,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xff0f172a),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          for (final addon in entry.value) ...[
+                            _buildDrinkAddonItemCard(ticket, addon, entry.key.replaceAll('s', '')),
+                            const SizedBox(height: 10),
+                          ],
+                          const SizedBox(height: 12),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xff2d98e5),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        });
+      },
+    );
+  }
+
+  Widget _buildDrinkAddonItemCard(Ticket ticket, CookoutAddon addon, String categorySingular) {
+    final qty = bookingController.getAddonQuantity(ticket.id, addon.id);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xffe2e8f0)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  addon.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                    color: Color(0xff0f172a),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$categorySingular · Available: ${addon.available}',
+                  style: const TextStyle(
+                    color: Color(0xff94a3b8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'BS\$${addon.price.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                  color: Color(0xff0f172a),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: const Color(0xfff1f5f9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () => bookingController.updateAddonQuantity(ticket.id, addon, -1),
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0xfff1f5f9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('-', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text(
+                        '$qty',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
+                          color: Color(0xff0f172a),
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => bookingController.updateAddonQuantity(ticket.id, addon, 1),
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0xff2d98e5),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('+', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -2302,6 +3198,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 fontWeight: FontWeight.w900,
                                 fontSize: 15,
                                 color: Color(0xff0f172a))),
+                        if (ticket.hasViewablePackage) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            '• Package: ${ticket.drinkPackage?.name ?? ticket.name}${ticket.sectionsLabel.isNotEmpty ? " (Section: ${ticket.sectionsLabel})" : ""}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xff7e22ce),
+                            ),
+                          ),
+                        ],
                         if (ticket.cookout != null) ...[
                           if (ticket.cookout!.includedSides.isNotEmpty) ...[
                             const SizedBox(height: 6),
@@ -2395,8 +3302,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               )),
           const Divider(height: 40, color: Color(0xfff1f5f9)),
           _summaryRow('Services Subtotal', 'BS\$${subtotal.toStringAsFixed(2)}'),
-          _summaryRow(
-              'Service & Processing Fee', 'BS\$${fees.toStringAsFixed(2)}'),
+          _summaryRow('Ticket & Processing Fees', 'BS\$${(bookingController.serviceFee + bookingController.processingFee).toStringAsFixed(2)}'),
+          if (bookingController.vipFee > 0)
+            _summaryRow('VIP Package Fee', 'BS\$${bookingController.vipFee.toStringAsFixed(2)}'),
+          if (bookingController.drinkFee > 0)
+            _summaryRow('Drink Fees', 'BS\$${bookingController.drinkFee.toStringAsFixed(2)}'),
+          if (bookingController.bottleFee > 0)
+            _summaryRow('Bottle Fees', 'BS\$${bookingController.bottleFee.toStringAsFixed(2)}'),
           _summaryRow('Tax', 'BS\$${tax.toStringAsFixed(2)}'),
           const SizedBox(height: 20),
           Row(
@@ -2432,7 +3344,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             width: double.infinity,
             height: 52,
             child: ElevatedButton(
-              onPressed: () => bookingController.payWithWallet(),
+              onPressed: () => bookingController.payWithWallet(event.slug),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xff10b981),
                 foregroundColor: Colors.white,
@@ -2449,7 +3361,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             width: double.infinity,
             height: 52,
             child: ElevatedButton(
-              onPressed: () => bookingController.buyWithStripe(event.id),
+              onPressed: () => bookingController.buyWithStripe(event.slug),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xff238df2),
                 foregroundColor: Colors.white,

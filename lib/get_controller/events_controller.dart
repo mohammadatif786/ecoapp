@@ -84,9 +84,7 @@ class EventsController extends GetxController {
     try {
       isBookingsLoading.value = true;
       if (canceled) {
-        final items = await LinkupApiService.fetchEventBookings(
-          status: 'cancelled',
-        );
+        final items = await LinkupApiService.fetchCancelledEventBookings();
         canceledBookings.assignAll(items);
         debugPrint('[Events] cancelled bookings count=${items.length}');
       } else {

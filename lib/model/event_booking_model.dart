@@ -52,6 +52,94 @@ class EventBookingEvent {
   }
 }
 
+class EventBookingTicket {
+  final int id;
+  final int eventId;
+  final String ticketNumber;
+  final String ticketName;
+  final String ticketType;
+  final int quantity;
+  final double paid;
+  final double subTotal;
+  final double total;
+  final double fee;
+  final double tax;
+  final double drinksTotal;
+  final double tablesTotal;
+  final double wellnessTotal;
+  final double cookoutTotal;
+  final List<dynamic> drinkAddons;
+  final List<dynamic> tableAddons;
+  final List<dynamic> wellnessAddons;
+  final List<dynamic> cookoutAddons;
+  final String ticketStatus;
+  final bool checkin;
+  final List<dynamic> checkinDetails;
+  final bool canCancel;
+  final dynamic event;
+
+  const EventBookingTicket({
+    required this.id,
+    required this.eventId,
+    required this.ticketNumber,
+    required this.ticketName,
+    required this.ticketType,
+    required this.quantity,
+    required this.paid,
+    required this.subTotal,
+    required this.total,
+    required this.fee,
+    required this.tax,
+    required this.drinksTotal,
+    required this.tablesTotal,
+    required this.wellnessTotal,
+    required this.cookoutTotal,
+    required this.drinkAddons,
+    required this.tableAddons,
+    required this.wellnessAddons,
+    required this.cookoutAddons,
+    required this.ticketStatus,
+    required this.checkin,
+    required this.checkinDetails,
+    required this.canCancel,
+    required this.event,
+  });
+
+  factory EventBookingTicket.fromJson(Map<String, dynamic> json) {
+    final chk = _asBool(json['checkin']);
+    final stat = (json['ticket_status'] ?? 'confirmed').toString();
+    final canceled = stat.toLowerCase().contains('cancel');
+    final canC = json['can_cancel'] ?? (!chk && !canceled);
+
+    return EventBookingTicket(
+      id: _asInt(json['id']),
+      eventId: _asInt(json['event_id']),
+      ticketNumber: (json['ticket_qrcode'] ?? json['qr'] ?? '').toString(),
+      ticketName: (json['ticket_name'] ?? 'Ticket').toString(),
+      ticketType: (json['ticket_type'] ?? 'General').toString(),
+      quantity: _asInt(json['quantity'] ?? 1),
+      paid: _asDouble(json['paid']),
+      subTotal: _asDouble(json['sub_total']),
+      total: _asDouble(json['total']),
+      fee: _asDouble(json['fee']),
+      tax: _asDouble(json['tax']),
+      drinksTotal: _asDouble(json['drinks_total']),
+      tablesTotal: _asDouble(json['tables_total']),
+      wellnessTotal: _asDouble(json['wellness_total']),
+      cookoutTotal: _asDouble(json['cookout_total']),
+      drinkAddons: json['drink_addons'] is List ? json['drink_addons'] as List : const [],
+      tableAddons: json['table_addons'] is List ? json['table_addons'] as List : const [],
+      wellnessAddons: json['wellness_addons'] is List ? json['wellness_addons'] as List : const [],
+      cookoutAddons: json['cookout_addons'] is List ? json['cookout_addons'] as List : const [],
+      ticketStatus: stat,
+      checkin: chk,
+      checkinDetails: json['checkin_details'] is List ? json['checkin_details'] as List : const [],
+      canCancel: canC is bool ? canC : _asBool(canC),
+      event: json['event'] ?? {},
+    );
+  }
+}
+
 class EventBooking {
   final int id;
   final int eventId;
@@ -61,8 +149,22 @@ class EventBooking {
   final int quantity;
   final int noOfTickets;
   final double paid;
+  final double subTotal;
+  final double total;
+  final double fee;
+  final double tax;
+  final double drinksTotal;
+  final double tablesTotal;
+  final double wellnessTotal;
+  final double cookoutTotal;
+  final List<dynamic> drinkAddons;
+  final List<dynamic> tableAddons;
+  final List<dynamic> wellnessAddons;
+  final List<dynamic> cookoutAddons;
   final String ticketStatus;
   final bool checkin;
+  final List<dynamic> checkinDetails;
+  final bool canCancel;
   final String ticketName;
   final String ticketType;
   final EventBookingEvent event;
@@ -76,8 +178,22 @@ class EventBooking {
     required this.quantity,
     required this.noOfTickets,
     required this.paid,
+    this.subTotal = 0,
+    this.total = 0,
+    this.fee = 0,
+    this.tax = 0,
+    this.drinksTotal = 0,
+    this.tablesTotal = 0,
+    this.wellnessTotal = 0,
+    this.cookoutTotal = 0,
+    this.drinkAddons = const [],
+    this.tableAddons = const [],
+    this.wellnessAddons = const [],
+    this.cookoutAddons = const [],
     required this.ticketStatus,
     required this.checkin,
+    this.checkinDetails = const [],
+    this.canCancel = true,
     required this.ticketName,
     required this.ticketType,
     required this.event,
@@ -131,6 +247,11 @@ class EventBooking {
 
   factory EventBooking.fromJson(Map<String, dynamic> json) {
     final eventRaw = json['event'];
+    final chk = _asBool(json['checkin']);
+    final stat = (json['ticket_status'] ?? '').toString().trim();
+    final canceled = stat.toLowerCase().contains('cancel');
+    final canC = json['can_cancel'] ?? (!chk && !canceled);
+
     return EventBooking(
       id: _asInt(json['id']),
       eventId: _asInt(json['event_id']),
@@ -140,8 +261,22 @@ class EventBooking {
       quantity: _asInt(json['quantity']),
       noOfTickets: _asInt(json['no_of_tickets'] ?? json['quantity']),
       paid: _asDouble(json['paid']),
-      ticketStatus: (json['ticket_status'] ?? '').toString().trim(),
-      checkin: _asBool(json['checkin']),
+      subTotal: _asDouble(json['sub_total']),
+      total: _asDouble(json['total']),
+      fee: _asDouble(json['fee']),
+      tax: _asDouble(json['tax']),
+      drinksTotal: _asDouble(json['drinks_total']),
+      tablesTotal: _asDouble(json['tables_total']),
+      wellnessTotal: _asDouble(json['wellness_total']),
+      cookoutTotal: _asDouble(json['cookout_total']),
+      drinkAddons: json['drink_addons'] is List ? json['drink_addons'] as List : const [],
+      tableAddons: json['table_addons'] is List ? json['table_addons'] as List : const [],
+      wellnessAddons: json['wellness_addons'] is List ? json['wellness_addons'] as List : const [],
+      cookoutAddons: json['cookout_addons'] is List ? json['cookout_addons'] as List : const [],
+      ticketStatus: stat,
+      checkin: chk,
+      checkinDetails: json['checkin_details'] is List ? json['checkin_details'] as List : const [],
+      canCancel: canC is bool ? canC : _asBool(canC),
       ticketName: (json['ticket_name'] ?? '').toString().trim(),
       ticketType: (json['ticket_type'] ?? '').toString().trim(),
       event: eventRaw is Map

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:link_up/get_controller/events_controller.dart';
 import 'package:link_up/model/event_booking_model.dart';
 import 'package:link_up/model/linkup_event.dart';
+import 'package:link_up/services/linkup_api_service.dart';
+import 'package:pretty_qr_code/pretty_qr_code.dart';
 import 'package:link_up/ui/profile/profile_page.dart';
 import 'package:link_up/widgets/linkup_location_sheet.dart';
 import 'package:get/get.dart';
@@ -47,7 +49,6 @@ class _AllEventsState extends State<AllEvents> {
     'Booking',
     'Canceled',
     'Favorite',
-    'Wallet',
   ];
 
   double _ui(BuildContext context, double value) {
@@ -306,13 +307,13 @@ class _AllEventsState extends State<AllEvents> {
       ...List.generate(groups.length, (index) {
         return Padding(
           padding: EdgeInsets.only(bottom: _ui(context, 14)),
-          child: _bookingGroupCard(context, groups[index]),
+          child: _bookingGroupCard(context, groups[index], canceled: canceled),
         );
       }),
     ];
   }
 
-  Widget _bookingGroupCard(BuildContext context, EventBookingGroup group) {
+  Widget _bookingGroupCard(BuildContext context, EventBookingGroup group, {required bool canceled}) {
     final expanded = _expandedBookingIds.contains(group.eventId);
     final event = group.event;
     return Container(
@@ -463,7 +464,7 @@ class _AllEventsState extends State<AllEvents> {
                 if (expanded) ...[
                   SizedBox(height: _ui(context, 8)),
                   ...group.purchases.map(
-                    (purchase) => _purchaseRow(context, purchase),
+                    (purchase) => _purchaseRow(context, purchase, canceled: canceled),
                   ),
                 ],
                 SizedBox(height: _ui(context, 8)),
@@ -508,59 +509,475 @@ class _AllEventsState extends State<AllEvents> {
     );
   }
 
-  Widget _purchaseRow(BuildContext context, EventBooking purchase) {
-    return GestureDetector(
-      onTap: () => Get.to(() => EventBookingTicketPage(booking: purchase)),
-      child: Container(
-        margin: EdgeInsets.only(bottom: _ui(context, 8)),
-        padding: EdgeInsets.symmetric(
-          horizontal: _ui(context, 12),
-          vertical: _ui(context, 10),
-        ),
-        decoration: BoxDecoration(
-          color: const Color(0xfff8fafc),
-          borderRadius: BorderRadius.circular(_ui(context, 12)),
-          border: Border.all(color: const Color(0xffe5edf6)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _purchaseRow(BuildContext context, EventBooking purchase, {required bool canceled}) {
+    return Container(
+      margin: EdgeInsets.only(bottom: _ui(context, 10)),
+      padding: EdgeInsets.all(_ui(context, 12)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_ui(context, 16)),
+        border: Border.all(color: const Color(0xffe2e8f0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '#${purchase.id}',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: _font(context, 15),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    purchase.ticketName.isEmpty
-                        ? 'Ticket'
-                        : purchase.ticketName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    purchase.paidLabel,
                     style: TextStyle(
-                      color: const Color(0xff142033),
-                      fontSize: _font(context, 13),
-                      fontWeight: FontWeight.w800,
+                      color: Colors.black,
+                      fontSize: _font(context, 15),
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
                   SizedBox(height: _ui(context, 2)),
-                  Text(
-                    '${purchase.date} · ${purchase.ticketCount} ticket${purchase.ticketCount == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      color: const Color(0xff7a8aa0),
-                      fontSize: _font(context, 11),
-                      fontWeight: FontWeight.w600,
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: _ui(context, 8),
+                      vertical: _ui(context, 2),
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xffd8f8eb),
+                      borderRadius: BorderRadius.circular(_ui(context, 8)),
+                    ),
+                    child: Text(
+                      purchase.statusLabel.toLowerCase(),
+                      style: TextStyle(
+                        color: const Color(0xff059669),
+                        fontSize: _font(context, 10),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
               ),
+            ],
+          ),
+          SizedBox(height: _ui(context, 4)),
+          Text(
+            purchase.date.isNotEmpty ? purchase.date : purchase.eventDateLabel,
+            style: TextStyle(
+              color: const Color(0xff8aa0bc),
+              fontSize: _font(context, 12),
+              fontWeight: FontWeight.w700,
             ),
-            Text(
-              purchase.paidLabel,
-              style: TextStyle(
-                color: const Color(0xff08a66d),
-                fontSize: _font(context, 13),
-                fontWeight: FontWeight.w900,
+          ),
+          SizedBox(height: _ui(context, 12)),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _showTicketQrModal(context, purchase),
+                  icon: Icon(Icons.qr_code_2_rounded, size: _ui(context, 18), color: const Color(0xff1e293b)),
+                  label: Text(
+                    'Show QR',
+                    style: TextStyle(
+                      color: const Color(0xff1e293b),
+                      fontSize: _font(context, 13),
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xffcbd5e1)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(_ui(context, 12)),
+                    ),
+                    padding: EdgeInsets.symmetric(vertical: _ui(context, 10)),
+                  ),
+                ),
               ),
-            ),
-          ],
+              if (!canceled && !purchase.isCanceled) ...[
+                SizedBox(width: _ui(context, 10)),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showCancelBookingDialog(context, purchase),
+                    icon: Icon(Icons.cancel_outlined, size: _ui(context, 18), color: const Color(0xffe11d48)),
+                    label: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: const Color(0xffe11d48),
+                        fontSize: _font(context, 13),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xfffecdd3)),
+                      backgroundColor: const Color(0xfffff1f2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(_ui(context, 12)),
+                      ),
+                      padding: EdgeInsets.symmetric(vertical: _ui(context, 10)),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCancelBookingDialog(BuildContext context, EventBooking purchase) async {
+    final eventTitle = purchase.event.title.isNotEmpty ? purchase.event.title : 'Event';
+    final refundAmountStr = purchase.paidLabel;
+
+    final confirmed = await Get.dialog<bool>(
+      Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: Colors.white,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'Cancel Ticket?',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xff0f172a),
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Get.back(result: false),
+                    icon: const Icon(Icons.close, color: Colors.black, size: 22),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '$eventTitle · #${purchase.id}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xff94a3b8),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xfff8fafc),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xffe2e8f0)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Refund amount',
+                          style: TextStyle(
+                            color: Color(0xff64748b),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        Text(
+                          refundAmountStr,
+                          style: const TextStyle(
+                            color: Color(0xff059669),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Refund to',
+                          style: TextStyle(
+                            color: Color(0xff64748b),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const Text(
+                          'LinkUp Wallet',
+                          style: TextStyle(
+                            color: Color(0xff0f172a),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () => Get.back(result: true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xffe11d48),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    'Yes, Cancel & Refund',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: TextButton(
+                  onPressed: () => Get.back(result: false),
+                  child: const Text(
+                    'Keep Ticket',
+                    style: TextStyle(
+                      color: Color(0xff334155),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final res = await LinkupApiService.cancelEventBooking(purchase.id);
+        if (res['success'] == true) {
+          Get.snackbar('Booking Cancelled', res['message'] ?? 'Ticket cancelled successfully.',
+              snackPosition: SnackPosition.BOTTOM);
+          eventsController.fetchBookings();
+          eventsController.fetchBookings(canceled: true);
+        } else {
+          Get.snackbar('Cancellation Failed', res['message'] ?? 'Could not cancel booking.',
+              snackPosition: SnackPosition.BOTTOM);
+        }
+      } catch (e) {
+        Get.snackbar('Error', 'An error occurred: $e', snackPosition: SnackPosition.BOTTOM);
+      }
+    }
+  }
+
+  void _showTicketQrModal(BuildContext context, EventBooking purchase) {
+    final eventTitle = purchase.event.title.isNotEmpty ? purchase.event.title : 'Ticket';
+    final qrData = purchase.qrToken.isNotEmpty ? purchase.qrToken : 'LK-TKT-${purchase.id}';
+
+    Get.dialog(
+      Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: Colors.white,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xfff43f5e),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.confirmation_number, color: Colors.white, size: 18),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Ticket QR',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xff0f172a),
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Get.back(),
+                    icon: const Icon(Icons.close, color: Colors.black, size: 22),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                eventTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xff0f172a),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '#${purchase.id}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xff94a3b8),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: 220,
+                height: 220,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xffe2e8f0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: PrettyQrView.data(data: qrData),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.check_box, color: Color(0xff10b981), size: 16),
+                  SizedBox(width: 6),
+                  Text(
+                    'Scan at the gate to validate entry',
+                    style: TextStyle(
+                      color: Color(0xff10b981),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Get.back();
+                    Get.snackbar('Send via Chat', 'Sharing ticket QR code via chat...',
+                        snackPosition: SnackPosition.BOTTOM);
+                  },
+                  icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                  label: const Text(
+                    'Send via Chat',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xff2d98e5),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => Get.snackbar('Apple Wallet', 'Added to Apple Wallet.',
+                          snackPosition: SnackPosition.BOTTOM),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.apple, color: Colors.white, size: 20),
+                            SizedBox(width: 6),
+                            Text(
+                              'Apple Wallet',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => Get.snackbar('Google Wallet', 'Added to Google Wallet.',
+                          snackPosition: SnackPosition.BOTTOM),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xffe2e8f0)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.g_mobiledata, color: Color(0xff4285F4), size: 28),
+                            Text(
+                              'Google Wallet',
+                              style: TextStyle(
+                                color: Color(0xff1e293b),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

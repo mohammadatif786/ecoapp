@@ -31,6 +31,7 @@ class EventData {
   final List<Sponsor> sponsors;
   final OrganizerStats organizerStats;
   final List<Attendee> attendees;
+  final int goingCount;
   final bool showMap;
   final String currency;
   final bool isWellnessEvent;
@@ -43,6 +44,7 @@ class EventData {
     required this.sponsors,
     required this.organizerStats,
     required this.attendees,
+    this.goingCount = 0,
     required this.showMap,
     this.currency = '',
     this.isWellnessEvent = false,
@@ -76,6 +78,9 @@ class EventData {
       attendees: (json['attendees'] as List? ?? [])
           .map((item) => Attendee.fromJson(Map<String, dynamic>.from(item)))
           .toList(),
+      goingCount: json['going_count'] is int
+          ? json['going_count'] as int
+          : int.tryParse(json['going_count']?.toString() ?? '') ?? 0,
       showMap: json['show_map'] == true || json['show_map'] == 1,
       currency: ApiUserMapper.asString(json['currency']),
       isWellnessEvent: json['is_wellness_event'] == true || json['is_wellness_event'] == 1,
@@ -91,6 +96,7 @@ class EventData {
       sponsors: sponsors,
       organizerStats: organizerStats ?? this.organizerStats,
       attendees: attendees,
+      goingCount: goingCount,
       showMap: showMap,
       currency: currency,
       isWellnessEvent: isWellnessEvent,
@@ -129,6 +135,9 @@ class EventDetail {
   final String categoryName;
   final bool isFavourite;
   final int favouritesCount;
+  final bool isGoing;
+  final bool attendeesVisible;
+  final List<String> galleryUrls;
   final EventSpecificDetails eventDetails;
   final List<Review> reviews;
 
@@ -162,6 +171,9 @@ class EventDetail {
     required this.categoryName,
     required this.isFavourite,
     required this.favouritesCount,
+    this.isGoing = false,
+    this.attendeesVisible = true,
+    this.galleryUrls = const [],
     required this.eventDetails,
     required this.reviews,
   });
@@ -171,6 +183,16 @@ class EventDetail {
     final details = EventSpecificDetails.fromJson(
       detailsRaw is Map ? Map<String, dynamic>.from(detailsRaw) : <String, dynamic>{},
     );
+
+    final galleryUrls = (json['gallery_urls'] as List? ?? json['gallery'] as List? ?? [])
+        .map((item) => item?.toString() ?? '')
+        .where((url) => url.isNotEmpty)
+        .toList();
+
+    if (details.imageGallery.isEmpty && galleryUrls.isNotEmpty) {
+      details.imageGallery.addAll(galleryUrls);
+    }
+
     var imageUrl = ApiUserMapper.resolveEventImage(json);
     if (imageUrl.isEmpty && details.imageGallery.isNotEmpty) {
       imageUrl = details.imageGallery.first;
@@ -227,6 +249,14 @@ class EventDetail {
       favouritesCount: json['favourites_count'] is int
           ? json['favourites_count'] as int
           : int.tryParse(json['favourites_count']?.toString() ?? '') ?? 0,
+      isGoing: json['is_going'] == true || json['is_going'] == 1,
+      attendeesVisible: json['attendees'] is bool
+          ? json['attendees'] as bool
+          : (json['attendees'] == true || json['attendees'] == 1),
+      galleryUrls: (json['gallery_urls'] as List? ?? [])
+          .map((item) => item?.toString() ?? '')
+          .where((url) => url.isNotEmpty)
+          .toList(),
       eventDetails: details,
       reviews: (json['reviews'] as List? ?? [])
           .map((item) => Review.fromJson(Map<String, dynamic>.from(item)))
@@ -330,6 +360,246 @@ class EventSpecificDetails {
   }
 }
 
+int _asInt(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+double _asDouble(dynamic value) {
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '') ?? 0.0;
+}
+
+bool _asBool(dynamic value) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  final text = value?.toString().toLowerCase().trim();
+  return text == 'true' || text == '1' || text == 'yes';
+}
+
+class DrinkItem {
+  final String id;
+  final String name;
+  final int qty;
+
+  const DrinkItem({required this.id, required this.name, required this.qty});
+
+  factory DrinkItem.fromJson(Map<String, dynamic> json) {
+    return DrinkItem(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      qty: _asInt(json['qty']),
+    );
+  }
+}
+
+class DrinkPackage {
+  final int id;
+  final int organizerId;
+  final String name;
+  final List<DrinkItem> bottles;
+  final List<DrinkItem> chasers;
+  final List<DrinkItem> waters;
+  final String? notes;
+
+  const DrinkPackage({
+    required this.id,
+    required this.organizerId,
+    required this.name,
+    this.bottles = const [],
+    this.chasers = const [],
+    this.waters = const [],
+    this.notes,
+  });
+
+  factory DrinkPackage.fromJson(Map<String, dynamic> json) {
+    return DrinkPackage(
+      id: _asInt(json['id']),
+      organizerId: _asInt(json['organizer_id']),
+      name: json['name']?.toString() ?? '',
+      bottles: (json['bottles'] as List? ?? [])
+          .whereType<Map>()
+          .map((item) => DrinkItem.fromJson(Map<String, dynamic>.from(item)))
+          .toList(),
+      chasers: (json['chasers'] as List? ?? [])
+          .whereType<Map>()
+          .map((item) => DrinkItem.fromJson(Map<String, dynamic>.from(item)))
+          .toList(),
+      waters: (json['waters'] as List? ?? [])
+          .whereType<Map>()
+          .map((item) => DrinkItem.fromJson(Map<String, dynamic>.from(item)))
+          .toList(),
+      notes: json['notes']?.toString(),
+    );
+  }
+}
+
+class EventFeeSettings {
+  final int id;
+  final double serviceFeePct;
+  final double serviceFeeFixed;
+  final double processingFeePct;
+  final double processingFeeFixed;
+  final double taxRate;
+  final bool taxInclusive;
+  final String currency;
+  final double drinkFeePct;
+  final double bottleFeePct;
+  final double vipFeePct;
+
+  const EventFeeSettings({
+    required this.id,
+    required this.serviceFeePct,
+    required this.serviceFeeFixed,
+    required this.processingFeePct,
+    required this.processingFeeFixed,
+    required this.taxRate,
+    required this.taxInclusive,
+    required this.currency,
+    required this.drinkFeePct,
+    required this.bottleFeePct,
+    required this.vipFeePct,
+  });
+
+  factory EventFeeSettings.fromJson(Map<String, dynamic> json) {
+    return EventFeeSettings(
+      id: _asInt(json['id']),
+      serviceFeePct: _asDouble(json['service_fee_pct']),
+      serviceFeeFixed: _asDouble(json['service_fee_fixed']),
+      processingFeePct: _asDouble(json['processing_fee_pct']),
+      processingFeeFixed: _asDouble(json['processing_fee_fixed']),
+      taxRate: _asDouble(json['tax_rate']),
+      taxInclusive: _asBool(json['tax_inclusive']),
+      currency: json['currency']?.toString() ?? 'USD',
+      drinkFeePct: _asDouble(json['drink_fee_pct']),
+      bottleFeePct: _asDouble(json['bottle_fee_pct']),
+      vipFeePct: _asDouble(json['vip_fee_pct']),
+    );
+  }
+}
+
+class EventTicketsResponse {
+  final bool status;
+  final List<Ticket> tickets;
+  final Map<String, dynamic> eventDrinks;
+  final List<DrinkPackage> drinkPackages;
+  final List<dynamic> coupons;
+  final double fee;
+  final double tax;
+  final Map<String, dynamic> taxConfig;
+  final EventFeeSettings? eventFeeSettings;
+
+  const EventTicketsResponse({
+    required this.status,
+    required this.tickets,
+    this.eventDrinks = const {},
+    this.drinkPackages = const [],
+    this.coupons = const [],
+    this.fee = 0.0,
+    this.tax = 0.0,
+    this.taxConfig = const {},
+    this.eventFeeSettings,
+  });
+
+  factory EventTicketsResponse.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] is Map ? Map<String, dynamic>.from(json['data']) : <String, dynamic>{};
+    final ticketsRaw = data['tickets'];
+    final ticketsList = ticketsRaw is List
+        ? ticketsRaw
+            .whereType<Map>()
+            .map((item) => Ticket.fromJson(Map<String, dynamic>.from(item)))
+            .toList()
+        : <Ticket>[];
+
+    final drinksRaw = data['event_drinks'];
+    final drinksMap = drinksRaw is Map
+        ? Map<String, dynamic>.from(drinksRaw)
+        : <String, dynamic>{};
+
+    return EventTicketsResponse(
+      status: json['status'] == true || json['status'] == 1,
+      tickets: ticketsList,
+      eventDrinks: drinksMap,
+      drinkPackages: (data['drink_packages'] as List? ?? [])
+          .whereType<Map>()
+          .map((item) => DrinkPackage.fromJson(Map<String, dynamic>.from(item)))
+          .toList(),
+      coupons: data['coupons'] is List ? data['coupons'] as List : [],
+      fee: _asDouble(data['fee']),
+      tax: _asDouble(data['tax']),
+      taxConfig: data['tax_config'] is Map ? Map<String, dynamic>.from(data['tax_config']) : {},
+      eventFeeSettings: data['event_fee_settings'] is Map
+          ? EventFeeSettings.fromJson(Map<String, dynamic>.from(data['event_fee_settings']))
+          : null,
+    );
+  }
+}
+
+class TicketDrinkAddonItem {
+  final String id;
+  final String name;
+  final int qty;
+  final double cost;
+
+  const TicketDrinkAddonItem({
+    required this.id,
+    required this.name,
+    required this.qty,
+    required this.cost,
+  });
+
+  factory TicketDrinkAddonItem.fromJson(Map<String, dynamic> json) {
+    final nameVal = json['name']?.toString() ?? '';
+    return TicketDrinkAddonItem(
+      id: json['id']?.toString() ?? nameVal,
+      name: nameVal,
+      qty: _asInt(json['qty']),
+      cost: _asDouble(json['cost'] ?? json['price']),
+    );
+  }
+}
+
+class TicketDrinkAddons {
+  final bool enabled;
+  final Map<String, List<TicketDrinkAddonItem>> items;
+  final double total;
+
+  const TicketDrinkAddons({
+    required this.enabled,
+    required this.items,
+    required this.total,
+  });
+
+  bool get hasDrinks => enabled && items.values.any((list) => list.isNotEmpty);
+
+  factory TicketDrinkAddons.fromJson(dynamic json) {
+    if (json is! Map) {
+      return const TicketDrinkAddons(enabled: false, items: {}, total: 0.0);
+    }
+    final map = Map<String, dynamic>.from(json);
+    final enabled = map['enabled'] == '1' || map['enabled'] == 1 || map['enabled'] == true;
+    final itemsRaw = map['items'] is Map ? Map<String, dynamic>.from(map['items']) : <String, dynamic>{};
+
+    final parsedItems = <String, List<TicketDrinkAddonItem>>{};
+    itemsRaw.forEach((categoryKey, listRaw) {
+      if (listRaw is List) {
+        parsedItems[categoryKey] = listRaw
+            .whereType<Map>()
+            .map((item) => TicketDrinkAddonItem.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
+      }
+    });
+
+    return TicketDrinkAddons(
+      enabled: enabled,
+      items: parsedItems,
+      total: _asDouble(map['total']),
+    );
+  }
+}
+
 class Ticket {
   final int id;
   final String name;
@@ -341,6 +611,13 @@ class Ticket {
   final bool hasTable;
   final String tablePrice;
   final int tableCapacity;
+  final List<dynamic> sections;
+  final int? packageId;
+  final DrinkPackage? drinkPackage;
+  final TicketDrinkAddons? drinkAddons;
+  final List<dynamic> mainBottles;
+  final List<dynamic> chasersOrMixers;
+  final List<dynamic> waterOptions;
   final int quantity;
   final int qtyAvailable;
   final String? salesStart;
@@ -364,6 +641,13 @@ class Ticket {
     required this.hasTable,
     required this.tablePrice,
     required this.tableCapacity,
+    this.sections = const [],
+    this.packageId,
+    this.drinkPackage,
+    this.drinkAddons,
+    this.mainBottles = const [],
+    this.chasersOrMixers = const [],
+    this.waterOptions = const [],
     required this.quantity,
     required this.qtyAvailable,
     this.salesStart,
@@ -375,6 +659,19 @@ class Ticket {
     this.packageItems = const [],
   });
 
+  String get sectionsLabel {
+    if (sections.isEmpty) return '';
+    final names = <String>[];
+    for (final s in sections) {
+      if (s is Map && s['name'] != null) {
+        names.add(s['name'].toString());
+      } else if (s != null) {
+        names.add(s.toString());
+      }
+    }
+    return names.join(', ');
+  }
+
   bool get salesHaveEnded {
     final end = DateTime.tryParse(salesEnd ?? '');
     if (end == null) return false;
@@ -382,15 +679,31 @@ class Ticket {
   }
 
   bool get isPurchasable {
-    if (qtyAvailable <= 0) return false;
-    if (salesHaveEnded) return false;
     final statusText = status.trim().toLowerCase();
     if (statusText == 'inactive' ||
         statusText == 'ended' ||
         statusText.contains('cancel')) {
       return false;
     }
+    if (salesHaveEnded) return false;
+    if (qtyAvailable <= 0 && quantity <= 0 && statusText != 'active') {
+      return false;
+    }
     return true;
+  }
+
+  bool get hasViewablePackage {
+    if (packageItems.isNotEmpty) return true;
+    if (packageId != null) return true;
+    if (drinkPackage != null) return true;
+    if (hasTable && (tableCapacity > 0 || (double.tryParse(tablePrice) ?? 0) > 0)) return true;
+    return false;
+  }
+
+  bool get hasDrinkAddons {
+    if (drinkAddons != null && drinkAddons!.hasDrinks) return true;
+    if (cookout != null && cookout!.drinks.isNotEmpty) return true;
+    return false;
   }
 
   factory Ticket.fromJson(Map<String, dynamic> json) {
@@ -410,6 +723,15 @@ class Ticket {
       hasTable: json['has_table'] == true || json['has_table'] == 1 || json['has_table']?.toString() == 'true',
       tablePrice: json['table_price']?.toString() ?? '0.00',
       tableCapacity: json['table_capacity'] is int ? json['table_capacity'] : int.tryParse(json['table_capacity']?.toString() ?? '') ?? 0,
+      sections: json['sections'] is List ? json['sections'] as List : const [],
+      packageId: json['package_id'] is int ? json['package_id'] as int : int.tryParse(json['package_id']?.toString() ?? ''),
+      drinkPackage: json['drink_package'] is Map
+          ? DrinkPackage.fromJson(Map<String, dynamic>.from(json['drink_package'] as Map))
+          : null,
+      drinkAddons: TicketDrinkAddons.fromJson(json['drink_addons']),
+      mainBottles: json['main_bottles'] is List ? json['main_bottles'] as List : const [],
+      chasersOrMixers: json['chasers_or_mixers'] is List ? json['chasers_or_mixers'] as List : const [],
+      waterOptions: json['water_options'] is List ? json['water_options'] as List : const [],
       quantity: json['quantity'] is int ? json['quantity'] : int.tryParse(json['quantity']?.toString() ?? '') ?? 0,
       qtyAvailable: json['qty_available'] is int ? json['qty_available'] : int.tryParse(json['qty_available']?.toString() ?? '') ?? 0,
       salesStart: json['sales_start']?.toString(),
@@ -465,6 +787,48 @@ class Cookout {
       proteins.isNotEmpty;
 
   factory Cookout.fromJson(Map<String, dynamic> json) {
+    List<CookoutOption> parsedPlates = [];
+    List<CookoutAddon> parsedProteins = [];
+
+    final rawPlates = json['plates'] ?? json['included_plates'] ?? json['proteins_included'];
+    if (rawPlates is List) {
+      for (final item in rawPlates) {
+        if (item is Map) {
+          parsedPlates.add(CookoutOption.fromJson(item.cast<String, dynamic>()));
+        }
+      }
+    }
+
+    final rawProteins = json['proteins'];
+    if (rawProteins is List) {
+      for (final item in rawProteins) {
+        if (item is Map) {
+          final map = item.cast<String, dynamic>();
+          final mode = map['mode']?.toString()?.toLowerCase() ?? '';
+          final price = _asDouble(map['price'] ?? map['cost']);
+          final name = map['name']?.toString() ?? '';
+
+          if (mode == 'included' || price == 0.0) {
+            if (!parsedPlates.any((p) => p.name == name)) {
+              parsedPlates.add(CookoutOption(
+                id: map['id']?.toString() ?? name,
+                name: name,
+                note: map['note']?.toString() ?? 'Included plate',
+              ));
+            }
+          } else {
+            parsedProteins.add(CookoutAddon.fromJson(map));
+          }
+        }
+      }
+    }
+
+    if (parsedPlates.isEmpty) {
+      parsedPlates = const [
+        CookoutOption(id: 'plate-default', name: 'Standard Plate', note: 'Included plate'),
+      ];
+    }
+
     List<CookoutAddon> addons(List<String> keys) {
       for (final key in keys) {
         final raw = json[key];
@@ -487,21 +851,14 @@ class Cookout {
       return const [];
     }
 
-    final rawPlates = json['plates'] ?? json['included_plates'] ?? json['proteins_included'];
-
     return Cookout(
       title: json['title']?.toString() ?? 'Cookout Plate Order',
       note: json['note']?.toString() ??
           'Base includes one plate. Add-ons update totals automatically.',
-      plates: rawPlates is List
-          ? rawPlates
-              .whereType<Map>()
-              .map((item) => CookoutOption.fromJson(item.cast<String, dynamic>()))
-              .toList()
-          : const [],
+      plates: parsedPlates,
       includedSides: sides(),
       drinks: addons(['drinks', 'addon_drinks', 'add_on_drinks']),
-      proteins: addons(['proteins', 'addon_proteins', 'add_on_proteins']),
+      proteins: parsedProteins.isNotEmpty ? parsedProteins : addons(['addon_proteins', 'add_on_proteins']),
     );
   }
 }
@@ -543,13 +900,14 @@ class CookoutAddon {
 
   factory CookoutAddon.fromJson(Map<String, dynamic> json) {
     final name = json['name']?.toString() ?? '';
+    final parsedQty = int.tryParse(
+            (json['available'] ?? json['qty_available'] ?? json['qty'])?.toString() ?? '') ??
+        0;
     return CookoutAddon(
       id: json['id']?.toString() ?? name,
       name: name,
       price: double.tryParse(json['price']?.toString() ?? '') ?? 0,
-      available: int.tryParse(
-              (json['available'] ?? json['qty_available'])?.toString() ?? '') ??
-          0,
+      available: parsedQty > 0 ? parsedQty : 50,
     );
   }
 }

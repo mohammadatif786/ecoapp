@@ -75,6 +75,10 @@ class ApiEndpoints {
   static const String events = '/api/regular-user/events';
   static const String eventFavorites = '/api/regular-user/events/favorites';
   static const String eventBookings = '/api/regular-user/events/bookings';
+  static const String eventBookingsCancelled = '/api/regular-user/events/bookings/cancelled';
+  static String eventBookingDetail(dynamic ticketId) => '/api/regular-user/events/bookings/$ticketId';
+  static String eventBookingCancel(dynamic ticketId) => '/api/regular-user/events/bookings/$ticketId/cancel';
+  static String eventBookingCancelRequest(dynamic ticketId) => '/api/regular-user/events/bookings/$ticketId/cancel-request';
   static String eventDetail(String slug) => '/api/regular-user/events/$slug';
   static String eventToggleFavorite(dynamic eventId) =>
       '/api/regular-user/events/$eventId/toggle-favorite';
@@ -92,7 +96,9 @@ class ApiEndpoints {
       '/api/regular-user/allnotifications/mark-all-read';
   
   static String eventTickets(String slug) => '/api/regular-user/events/$slug/tickets';
+  static String buyTicketsWallet(dynamic eventId) => '/api/regular-user/events/$eventId/tickets/buy-wallet';
   static String buyTicketsStripe(dynamic eventId) => '/api/regular-user/events/$eventId/tickets/buy-stripe';
+  static const String buyTicketsStripeConfirm = '/api/regular-user/events/tickets/buy-stripe/confirm';
 
   static const String likes = '/api/regular-user/likes';
 

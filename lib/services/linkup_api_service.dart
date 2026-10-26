@@ -908,7 +908,7 @@ class LinkupApiService {
     if (body is List) {
       return body
           .whereType<Map>()
-          .map((item) => EventBooking.fromJson(Map<String, dynamic>.from(item)))
+          .expand((item) => _expandBookingItem(Map<String, dynamic>.from(item)))
           .toList();
     }
     if (body is! Map) return const [];
@@ -917,7 +917,7 @@ class LinkupApiService {
     if (data is List) {
       return data
           .whereType<Map>()
-          .map((item) => EventBooking.fromJson(Map<String, dynamic>.from(item)))
+          .expand((item) => _expandBookingItem(Map<String, dynamic>.from(item)))
           .toList();
     }
     if (data is Map) {
@@ -925,12 +925,182 @@ class LinkupApiService {
       if (nested is List) {
         return nested
             .whereType<Map>()
-            .map((item) =>
-                EventBooking.fromJson(Map<String, dynamic>.from(item)))
+            .expand((item) =>
+                _expandBookingItem(Map<String, dynamic>.from(item)))
             .toList();
       }
     }
     return const [];
+  }
+
+  static List<EventBooking> _expandBookingItem(Map<String, dynamic> json) {
+    final tickets = json['tickets'];
+    if (tickets is List && tickets.isNotEmpty) {
+      final results = <EventBooking>[];
+      final eventIdVal = _asInt(json['event_id']);
+      final eventName = (json['event'] ?? '').toString().trim();
+      final eventDesc = (json['event_desc'] ?? '').toString().trim();
+      final eventImg = (json['img'] ?? '').toString().trim();
+
+      for (final t in tickets) {
+        if (t is Map) {
+          final tMap = Map<String, dynamic>.from(t);
+          final ticketId = _asInt(tMap['id'] ?? json['id']);
+          final paidAmt = _asDouble(tMap['paid'] ?? tMap['total'] ?? json['total'] ?? 0);
+          final qty = _asInt(tMap['quantity'] ?? json['ticket_count'] ?? 1);
+          final status = (tMap['ticket_status'] ?? tMap['status'] ?? json['ticket_status'] ?? 'confirmed').toString().trim();
+          final tName = (tMap['ticket_name'] ?? '').toString().trim();
+          final tType = (tMap['ticket_type'] ?? '').toString().trim();
+          final chk = _asBool(tMap['checkin'] ?? json['checkin']);
+          final canceled = status.toLowerCase().contains('cancel');
+          final canC = tMap['can_cancel'] ?? json['can_cancel'] ?? (!chk && !canceled);
+          final chkDetails = tMap['checkin_details'] is List ? tMap['checkin_details'] as List : (json['checkin_details'] is List ? json['checkin_details'] as List : const []);
+
+          results.add(EventBooking(
+            id: ticketId,
+            eventId: eventIdVal,
+            qr: (tMap['qr'] ?? json['qr'] ?? '').toString().trim(),
+            ticketQrcode: (tMap['ticket_qrcode'] ?? tMap['qr'] ?? json['qr'] ?? '').toString().trim(),
+            date: (json['date'] ?? '').toString().trim(),
+            quantity: qty,
+            noOfTickets: qty,
+            paid: paidAmt,
+            subTotal: _asDouble(tMap['sub_total'] ?? json['sub_total']),
+            total: _asDouble(tMap['total'] ?? json['total']),
+            fee: _asDouble(tMap['fee'] ?? json['fee']),
+            tax: _asDouble(tMap['tax'] ?? json['tax']),
+            drinksTotal: _asDouble(tMap['drinks_total'] ?? json['drinks_total']),
+            tablesTotal: _asDouble(tMap['tables_total'] ?? json['tables_total']),
+            wellnessTotal: _asDouble(tMap['wellness_total'] ?? json['wellness_total']),
+            cookoutTotal: _asDouble(tMap['cookout_total'] ?? json['cookout_total']),
+            drinkAddons: tMap['drink_addons'] is List ? tMap['drink_addons'] as List : (json['drink_addons'] is List ? json['drink_addons'] as List : const []),
+            tableAddons: tMap['table_addons'] is List ? tMap['table_addons'] as List : (json['table_addons'] is List ? json['table_addons'] as List : const []),
+            wellnessAddons: tMap['wellness_addons'] is List ? tMap['wellness_addons'] as List : (json['wellness_addons'] is List ? json['wellness_addons'] as List : const []),
+            cookoutAddons: tMap['cookout_addons'] is List ? tMap['cookout_addons'] as List : (json['cookout_addons'] is List ? json['cookout_addons'] as List : const []),
+            ticketStatus: status,
+            checkin: chk,
+            checkinDetails: chkDetails,
+            canCancel: canC is bool ? canC : _asBool(canC),
+            ticketName: tName,
+            ticketType: tType,
+            event: EventBookingEvent(
+              id: eventIdVal,
+              title: eventName.isEmpty ? 'Event Booking' : eventName,
+              venue: (json['venue'] ?? '').toString().trim(),
+              city: (json['city'] ?? '').toString().trim(),
+              country: (json['country'] ?? '').toString().trim(),
+              imageUrl: eventImg.isNotEmpty ? eventImg : ApiUserMapper.resolveEventImage(json),
+              description: eventDesc,
+              startTime: DateTime.tryParse((json['start_time'] ?? json['date'] ?? '').toString())?.toLocal(),
+              endTime: null,
+              currencySymbol: '\$',
+            ),
+          ));
+        }
+      }
+      return results;
+    }
+    return [EventBooking.fromJson(json)];
+  }
+
+  static int _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static double _asDouble(dynamic value) {
+    if (value is double) return value;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static bool _asBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final text = value?.toString().toLowerCase().trim();
+    return text == 'true' || text == '1' || text == 'yes';
+  }
+
+  /// `GET /api/regular-user/events/bookings/cancelled`
+  static Future<List<EventBooking>> fetchCancelledEventBookings() async {
+    final token = await getToken();
+    final response = await http.get(
+      _uri(ApiEndpoints.eventBookingsCancelled),
+      headers: _headers(token: token, json: false),
+    );
+    final body = _decodeBody(response);
+    if (response.statusCode >= 400) _throwFromResponse(response);
+    return _parseEventBookings(body);
+  }
+
+  /// `GET /api/regular-user/events/bookings/{ticketSaleId}`
+  static Future<Map<String, dynamic>?> showEventBookingDetail(int ticketSaleId) async {
+    final token = await getToken();
+    final response = await http.get(
+      _uri(ApiEndpoints.eventBookingDetail(ticketSaleId)),
+      headers: _headers(token: token, json: false),
+    );
+    final body = _decodeBody(response);
+    if (response.statusCode >= 400) _throwFromResponse(response);
+    if (body is Map) {
+      final map = Map<String, dynamic>.from(body);
+      if (map['data'] is Map) {
+        return Map<String, dynamic>.from(map['data'] as Map);
+      }
+      return map;
+    }
+    return null;
+  }
+
+  /// `POST /api/regular-user/events/bookings/{ticketSaleId}/cancel`
+  static Future<Map<String, dynamic>> cancelEventBooking(int ticketSaleId) async {
+    try {
+      final token = await getToken();
+      final response = await http.post(
+        _uri(ApiEndpoints.eventBookingCancel(ticketSaleId)),
+        headers: _headers(token: token),
+      );
+      final body = _decodeBody(response);
+      if (response.statusCode >= 400) {
+        if (body is Map && body['message'] != null) {
+          return {
+            'success': false,
+            'message': body['message'].toString(),
+          };
+        }
+        return {
+          'success': false,
+          'message': 'Failed to cancel booking (Status ${response.statusCode})',
+        };
+      }
+      if (body is Map) return Map<String, dynamic>.from(body);
+      return {'success': true, 'message': 'Booking cancelled successfully.'};
+    } catch (e) {
+      return {'success': false, 'message': 'An error occurred: $e'};
+    }
+  }
+
+  /// `POST /api/regular-user/events/bookings/{ticketSaleId}/cancel-request`
+  static Future<Map<String, dynamic>> cancelEventBookingRequest({
+    required int ticketSaleId,
+    required double refundAmount,
+    String? reason,
+  }) async {
+    final token = await getToken();
+    final fields = <String, dynamic>{
+      'amount': refundAmount,
+      if (reason != null && reason.isNotEmpty) 'reason': reason,
+    };
+    final response = await http.post(
+      _uri(ApiEndpoints.eventBookingCancelRequest(ticketSaleId)),
+      headers: _headers(token: token),
+      body: jsonEncode(fields),
+    );
+    final body = _decodeBody(response);
+    if (response.statusCode >= 400) _throwFromResponse(response);
+    if (body is Map) return Map<String, dynamic>.from(body);
+    return {'success': true};
   }
 
   static List<LinkupEvent> _parseEventList(dynamic body) {
@@ -1173,23 +1343,140 @@ class LinkupApiService {
     return true;
   }
 
+  /// `POST /api/regular-user/events/{eventId}/tickets/buy-wallet`
+  static Future<Map<String, dynamic>> buyTicketsWallet(dynamic eventId,
+      {required List<Map<String, dynamic>> items,
+      double? subtotal,
+      double? standardSubtotal,
+      double? serviceFee,
+      double? processingFee,
+      double? vipFee,
+      double? drinkFee,
+      double? bottleFee,
+      double? tax,
+      double? total}) async {
+    final token = await getToken();
+    final response = await http.post(
+      _uri(ApiEndpoints.buyTicketsWallet(eventId)),
+      headers: _headers(token: token, json: true),
+      body: jsonEncode({
+        'event_id': eventId,
+        'items': items,
+        if (subtotal != null) 'subtotal': subtotal,
+        if (standardSubtotal != null) 'standard_subtotal': standardSubtotal,
+        if (serviceFee != null) 'service_fee': serviceFee,
+        if (processingFee != null) 'processing_fee': processingFee,
+        if (vipFee != null) 'vip_fee': vipFee,
+        if (drinkFee != null) 'drink_fee': drinkFee,
+        if (bottleFee != null) 'bottle_fee': bottleFee,
+        if (tax != null) 'tax': tax,
+        if (total != null) 'total': total,
+      }),
+    );
+    final body = _decodeBody(response);
+    debugPrint('[WalletCheckout] status=${response.statusCode} body=$body');
+    if (response.statusCode >= 400) {
+      if (body is Map) {
+        final msg = body['message']?.toString() ?? body['error']?.toString() ?? 'Request failed (${response.statusCode})';
+        final errors = body['errors'];
+        String errDetail = msg;
+        if (errors is Map) {
+          final errMsgs = <String>[];
+          errors.forEach((k, v) {
+            if (v is List) {
+              errMsgs.add('$k: ${v.join(", ")}');
+            } else {
+              errMsgs.add('$k: $v');
+            }
+          });
+          if (errMsgs.isNotEmpty) errDetail = errMsgs.join(' | ');
+        }
+        return {'status': false, 'message': errDetail};
+      }
+    }
+    if (body is Map) {
+      return Map<String, dynamic>.from(body);
+    }
+    return {'status': false, 'message': 'Invalid response format'};
+  }
+
   /// `POST /api/regular-user/events/{eventId}/tickets/buy-stripe`
-  static Future<String?> buyTicketsStripe(dynamic eventId,
-      {required List<Map<String, dynamic>> tickets}) async {
+  static Future<Map<String, dynamic>> buyTicketsStripeInit(dynamic eventId,
+      {required List<Map<String, dynamic>> items,
+      double? subtotal,
+      double? standardSubtotal,
+      double? serviceFee,
+      double? processingFee,
+      double? vipFee,
+      double? drinkFee,
+      double? bottleFee,
+      double? tax,
+      double? total}) async {
     final token = await getToken();
     final response = await http.post(
       _uri(ApiEndpoints.buyTicketsStripe(eventId)),
-      headers: _headers(token: token),
+      headers: _headers(token: token, json: true),
       body: jsonEncode({
-        'tickets': tickets,
+        'event_id': eventId,
+        'items': items,
+        if (subtotal != null) 'subtotal': subtotal,
+        if (standardSubtotal != null) 'standard_subtotal': standardSubtotal,
+        if (serviceFee != null) 'service_fee': serviceFee,
+        if (processingFee != null) 'processing_fee': processingFee,
+        if (vipFee != null) 'vip_fee': vipFee,
+        if (drinkFee != null) 'drink_fee': drinkFee,
+        if (bottleFee != null) 'bottle_fee': bottleFee,
+        if (tax != null) 'tax': tax,
+        if (total != null) 'total': total,
+      }),
+    );
+    final body = _decodeBody(response);
+    debugPrint('[StripeCheckoutInit] status=${response.statusCode} body=$body');
+    if (response.statusCode >= 400) {
+      if (body is Map) {
+        final msg = body['message']?.toString() ?? body['error']?.toString() ?? 'Request failed (${response.statusCode})';
+        final errors = body['errors'];
+        String errDetail = msg;
+        if (errors is Map) {
+          final errMsgs = <String>[];
+          errors.forEach((k, v) {
+            if (v is List) {
+              errMsgs.add('$k: ${v.join(", ")}');
+            } else {
+              errMsgs.add('$k: $v');
+            }
+          });
+          if (errMsgs.isNotEmpty) errDetail = errMsgs.join(' | ');
+        }
+        return {'status': false, 'message': errDetail};
+      }
+    }
+    if (body is Map) {
+      return Map<String, dynamic>.from(body);
+    }
+    return {'status': false, 'message': 'Invalid response format'};
+  }
+
+  /// `POST /api/regular-user/events/tickets/buy-stripe/confirm`
+  static Future<Map<String, dynamic>> buyTicketsStripeConfirm({
+    required String cartToken,
+    required String paymentIntentId,
+  }) async {
+    final token = await getToken();
+    final response = await http.post(
+      _uri(ApiEndpoints.buyTicketsStripeConfirm),
+      headers: _headers(token: token, json: true),
+      body: jsonEncode({
+        'cart_token': cartToken,
+        'payment_intent_id': paymentIntentId,
       }),
     );
     final body = _decodeBody(response);
     if (response.statusCode >= 400) _throwFromResponse(response);
-    if (body is Map && body['status'] == true) {
-      return body['data']['checkout_url']?.toString();
+    if (body is Map) {
+      return Map<String, dynamic>.from(body);
     }
-    return null;
+    return {'status': false, 'message': 'Invalid response format'};
   }
 
   /// `GET /api/regular-user/allnotifications?type=`
@@ -1484,6 +1771,21 @@ class LinkupApiService {
       }
     }
     return [];
+  }
+
+  /// `GET /api/regular-user/events/{slug}/tickets` (Full response with addons, drinks, fees, coupons)
+  static Future<EventTicketsResponse> fetchEventTicketsResponse(String slug) async {
+    final token = await getToken();
+    final response = await http.get(
+      _uri(ApiEndpoints.eventTickets(slug)),
+      headers: _headers(token: token, json: false),
+    );
+    final body = _decodeBody(response);
+    if (response.statusCode >= 400) _throwFromResponse(response);
+    if (body is Map) {
+      return EventTicketsResponse.fromJson(Map<String, dynamic>.from(body));
+    }
+    return const EventTicketsResponse(status: false, tickets: []);
   }
 
   /// `GET /api/regular-user/live-streams/network`
